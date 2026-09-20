@@ -1,0 +1,201 @@
+package ui.test.rendering
+
+import ui.NodeKey
+
+import std.testing.Test
+import std.core.Exception
+import ui.View
+import ui.ViewContent
+import ui.RenderBackend
+import ui.RenderNode
+import ui.Renderer
+import ui.ViewScope
+import ui.State
+
+class ComponentState {
+  State<Integer>? count
+}
+
+class RecordedNode implements RenderNode {
+  Integer identity
+  String text
+  List<RenderNode> descendants
+  Boolean disposed
+  String failOn = ""
+  Boolean failClosing = false
+
+  Void update(View view) {
+    switch view.content {
+      case Text(String text) {
+        if text == failOn { throw Exception(message: "update failed") }
+        this.text = text
+      }
+      case _ {}
+    }
+  }
+
+  Void children(List<RenderNode> children) { descendants = children }
+  Void close() {
+    disposed = true
+    if failClosing { throw Exception(message: "close failed") }
+  }
+}
+
+class RecordingBackend implements RenderBackend {
+  List<RecordedNode> created
+  String failOn = ""
+
+  RenderNode create(ViewContent content) {
+    var node = RecordedNode(identity: created.size(), text: "", descendants: [], disposed: false, failOn: failOn)
+    created.add(node)
+    return node
+  }
+}
+
+@Test
+Void releasesNewNodesWhenAMountFails() {
+  var backend = RecordingBackend(created: [], failOn: "fail")
+  var renderer = Renderer(backend)
+  renderer.render(list([]))
+  Boolean rejected = false
+  try {
+    renderer.render(list([label(key: NodeKey.Named("a"), text: "created"), label(key: NodeKey.Named("b"), text: "fail")]))
+  } catch Exception failure {
+    rejected = true
+  }
+  require(condition: rejected, message: "mount failure reported")
+  require(condition: backend.created[1].disposed, message: "staged node released")
+  require(condition: backend.created[2].disposed, message: "failing node released")
+  require(condition: backend.created[0].descendants.size() == 0, message: "failed children not attached")
+  renderer.close()
+}
+
+@Test
+Void closesTheWholeTreeWhenAChildFailsToClose() {
+  var backend = RecordingBackend(created: [])
+  var renderer = Renderer(backend)
+  renderer.render(list([label(key: NodeKey.Named("a"), text: "first"), label(key: NodeKey.Named("b"), text: "second")]))
+  backend.created[1].failClosing = true
+  backend.created[2].failClosing = true
+  Boolean rejected = false
+  try { renderer.close() } catch Exception failure { rejected = true }
+  require(condition: rejected, message: "close failure reported")
+  require(condition: backend.created[0].disposed, message: "parent released")
+  require(condition: backend.created[1].disposed, message: "first child released")
+  require(condition: backend.created[2].disposed, message: "second child released")
+  renderer.close()
+}
+
+@Test
+Void reactsToComponentStateAndStopsObservingAfterUnmount() {
+  var backend = RecordingBackend(created: [])
+  var renderer = Renderer(backend)
+  var saved = ComponentState(count: null)
+  Function<View(ViewScope)> body = (ViewScope scope) {
+    var count = scope.state(key: NodeKey.Named("count"), initial: 0)
+    saved.count = count
+    return label(key: NodeKey.Named("value"), text: count.value.toString())
+  }
+  renderer.render(View(key: NodeKey.Named("counter"), content: ViewContent.Component(type: "counter", body: body)))
+  var count = saved.count
+  if count != null {
+    count.value = (2)
+    require(condition: backend.created[1].text == "2", message: "state change refreshed component")
+    renderer.close()
+    count.value = (3)
+    require(condition: backend.created[1].text == "2", message: "unmounted component stopped observing")
+  } else {
+    throw Exception(message: "component state was not created")
+  }
+}
+
+View label(NodeKey? key, String text) {
+  return View(key: key, content: ViewContent.Text(text))
+}
+
+View list(List<View> children) {
+  return View(key: NodeKey.Named("root"), content: ViewContent.Column(children))
+}
+
+@Test
+Void preservesNodesWhenKeyedChildrenMoveAndDisposesRemovedNodes() {
+  var backend = RecordingBackend(created: [])
+  var renderer = Renderer(backend)
+  renderer.render(list([label(key: NodeKey.Named("a"), text: "first"), label(key: NodeKey.Named("b"), text: "second")]))
+  var parent = backend.created[0]
+  var first = backend.created[1]
+  var second = backend.created[2]
+  renderer.render(list([label(key: NodeKey.Named("b"), text: "changed"), label(key: NodeKey.Named("a"), text: "first")]))
+  require(condition: backend.created.size() == 3, message: "reorder retains nodes")
+  require(condition: parent.descendants[0] == second, message: "key b moved")
+  require(condition: parent.descendants[1] == first, message: "key a moved")
+  require(condition: second.text == "changed", message: "retained node updated")
+  renderer.render(list([label(key: NodeKey.Named("b"), text: "changed")]))
+  require(condition: first.disposed, message: "removed node released")
+  require(condition: !second.disposed, message: "retained node remains mounted")
+  renderer.close()
+  require(condition: parent.disposed && second.disposed, message: "tree released")
+}
+
+@Test
+Void rejectsDuplicateKeysBeforeChangingTheTree() {
+  var backend = RecordingBackend(created: [])
+  var renderer = Renderer(backend)
+  renderer.render(list([label(key: NodeKey.Named("a"), text: "original")]))
+  Boolean rejected = false
+  try {
+    renderer.render(list([label(key: NodeKey.Named("a"), text: "changed"), label(key: NodeKey.Named("a"), text: "duplicate")]))
+  } catch Exception failure {
+    rejected = true
+  }
+  require(condition: rejected, message: "duplicate key rejected")
+  require(condition: backend.created.size() == 2, message: "no duplicate mount")
+  require(condition: backend.created[1].text == "original", message: "children unchanged")
+  renderer.close()
+}
+
+@Test
+Void preservesComponentStateAndReplacesItWhenItsTypeChanges() {
+  var backend = RecordingBackend(created: [])
+  var renderer = Renderer(backend)
+  Function<View(ViewScope)> initial = (ViewScope scope) {
+    var count = scope.state(key: NodeKey.Named("count"), initial: 1)
+    return label(key: NodeKey.Named("value"), text: count.value.toString())
+  }
+  Function<View(ViewScope)> replacement = (ViewScope scope) {
+    var count = scope.state(key: NodeKey.Named("count"), initial: 9)
+    return label(key: NodeKey.Named("value"), text: count.value.toString())
+  }
+  renderer.render(View(key: NodeKey.Named("counter"), content: ViewContent.Component(type: "counter", body: initial)))
+  var first = backend.created[1]
+  renderer.render(View(key: NodeKey.Named("counter"), content: ViewContent.Component(type: "counter", body: replacement)))
+  require(condition: first.text == "1", message: "component retains state")
+  renderer.render(View(key: NodeKey.Named("counter"), content: ViewContent.Component(type: "other", body: replacement)))
+  require(condition: first.disposed, message: "changed component type released")
+  require(condition: backend.created[3].text == "9", message: "changed component starts fresh")
+  renderer.close()
+}
+
+@Test
+Void separatesNamedIntegerAndPositionalKeys() {
+  var backend = RecordingBackend(created: [])
+  var renderer = Renderer(backend)
+  renderer.render(list([
+    label(key: NodeKey.Id(1), text: "integer"),
+    label(key: NodeKey.Named("1"), text: "named"),
+    label(key: null, text: "positional")
+  ]))
+  var integerNode = backend.created[1]
+  var namedNode = backend.created[2]
+  var positionalNode = backend.created[3]
+  renderer.render(list([
+    label(key: NodeKey.Named("1"), text: "named moved"),
+    label(key: NodeKey.Id(1), text: "integer moved"),
+    label(key: null, text: "positional retained")
+  ]))
+  require(condition: backend.created.size() == 4, message: "typed keys reuse their own nodes")
+  require(condition: integerNode.text == "integer moved", message: "integer identity retained")
+  require(condition: namedNode.text == "named moved", message: "named identity retained")
+  require(condition: positionalNode.text == "positional retained", message: "position is separate from explicit keys")
+  renderer.close()
+}

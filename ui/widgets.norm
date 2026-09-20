@@ -1,0 +1,33 @@
+package ui
+
+View text(String text, NodeKey? key = null, WidgetRole role = WidgetRole.Default) {
+  return View(key: key, role: role, content: ViewContent.Text(text))
+}
+
+View button(String text, Function<Void()> action, NodeKey? key = null, WidgetRole role = WidgetRole.Default, Boolean enabled = true) {
+  return View(key: key, role: role, enabled: enabled, content: ViewContent.Button(text: text, action: action))
+}
+
+View textField(String placeholder, Binding<String> value, Function<Void()> submit, NodeKey? key = null, WidgetRole role = WidgetRole.Default) {
+  return View(key: key, role: role, content: ViewContent.Input(placeholder: placeholder, text: value, submit: (String text) { submit() }))
+}
+
+View toggle(String text, Binding<Boolean> value, NodeKey? key = null, WidgetRole role = WidgetRole.Default, Boolean enabled = true) {
+  return View(key: key, role: role, enabled: enabled, content: ViewContent.Toggle(text: text, checked: value))
+}
+
+View column(List<View> children, NodeKey? key = null, WidgetRole role = WidgetRole.Default, Boolean enabled = true) {
+  return View(key: key, role: role, enabled: enabled, content: ViewContent.Column(children))
+}
+
+View row(List<View> children, NodeKey? key = null, WidgetRole role = WidgetRole.Default) {
+  return View(key: key, role: role, content: ViewContent.Row(children))
+}
+
+View component(String type, Function<View(ViewScope)> body, NodeKey? key = null, WidgetRole role = WidgetRole.Default) {
+  return View(key: key, role: role, content: ViewContent.Component(type: type, body: body))
+}
+
+View scroll(View child, NodeKey? key = null) {
+  return View(key: key, content: ViewContent.Scroll(child))
+}

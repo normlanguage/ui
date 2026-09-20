@@ -1,0 +1,27 @@
+package ui
+
+enum NodeKey { Named(String value), Id(Integer value), Item(ItemKey value) }
+
+value View implements Widget {
+  ViewContent content
+  NodeKey? key = null
+  Boolean enabled = true
+  WidgetRole role = WidgetRole.Default
+  ViewReference? reference = null
+  Widget build() { this }
+}
+
+enum ViewContent {
+  Text(String text),
+  Button(String text, Function<Void()> action),
+  Input(String placeholder, Binding<String>? text, Function<Void(String)> submit),
+  Toggle(String text, Binding<Boolean> checked),
+  Column(List<View> children),
+  Row(List<View> children),
+  Scroll(View child),
+  Component(String type, Function<View(ViewScope)> body),
+  WidgetObject(Widget widget)
+}
+
+
+enum WidgetRole { Default, Title, Muted, Primary, Destructive, Card }

@@ -1,0 +1,9 @@
+package ui
+
+String keyText(NodeKey key) {
+  return switch key {
+    case Named(String value) { break value }
+    case Id(Integer value) { break value.toString() }
+    case Item(_) { break "item" }
+  }
+}

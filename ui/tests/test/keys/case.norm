@@ -1,0 +1,98 @@
+package ui.test.keys
+
+import std.testing.Test
+import std.core.Exception
+import ui.Key
+import ui.TextFieldHandle
+import ui.TextFieldControl
+import ui.TextFieldRenderNode
+import ui.RenderNode
+import ui.RenderBackend
+import ui.Renderer
+import ui.View
+import ui.ViewContent
+import ui.TextField
+import ui.Binding
+import ui.Column
+
+@Test
+Void duplicateReferencesReleasePartiallyMountedInputs() {
+  var key = Key<TextFieldHandle>()
+  var backend = Backend()
+  var renderer = Renderer(backend)
+  var value = Binding<String>(read: () { "" }, write: (String next) {})
+  Boolean rejected = false
+  try {
+    renderer.render(Column([
+      TextField(placeholder: "一", value: value, key: key) {},
+      TextField(placeholder: "二", value: value, key: key) {}
+    ]))
+  } catch Exception error { rejected = true }
+  require(condition: rejected, message: "duplicate mounted references are rejected")
+  require(condition: key.current == null, message: "failed mount releases its key")
+  for node : backend.nodes { require(condition: node.closed, message: "failed mount releases every staged input") }
+  renderer.close()
+}
+
+class InputNode implements TextFieldRenderNode {
+  Handle handle
+  Boolean closed = false
+  Void update(View view) {}
+  Void children(List<RenderNode> children) {}
+  Void close() { closed = true }
+  TextFieldHandle textFieldHandle() { TextFieldHandle(handle) }
+}
+
+class Backend implements RenderBackend {
+  List<InputNode> nodes = []
+  RenderNode create(ViewContent content) {
+    var node = InputNode(handle: Handle())
+    nodes.add(node)
+    node
+  }
+}
+
+@Test
+Void mountedInputsConnectTransferAndReleaseTheirKeys() {
+  var first = Key<TextFieldHandle>()
+  var second = Key<TextFieldHandle>()
+  var backend = Backend()
+  var renderer = Renderer(backend)
+  var value = Binding<String>(read: () { "task" }, write: (String next) {})
+  renderer.render(TextField(placeholder: "任务", value: value, key: first) {})
+  require(condition: first.current != null, message: "mount connects the input handle")
+  first.current?.focus()
+  require(condition: backend.nodes[0].handle.focused == 1, message: "focus reaches the mounted input")
+  renderer.render(TextField(placeholder: "任务", value: value, key: second) {})
+  require(condition: first.current == null && second.current != null, message: "rebuild transfers the reference")
+  require(condition: backend.nodes.size() == 1, message: "reference transfer preserves the native input")
+  renderer.close()
+  require(condition: second.current == null && backend.nodes[0].closed, message: "unmount releases key and input")
+}
+
+class Handle implements TextFieldControl {
+  private String buffer = ""
+  String readText() { buffer }
+  Void clear() { buffer = "" }
+  Integer focused = 0
+  Void focus() { focused = focused + 1 }
+}
+
+@Test
+Void referencesAreTypedExclusiveAndReleasedByTheirConnection() {
+  var key = Key<TextFieldHandle>()
+  var handle = Handle()
+  require(condition: key.current == null, message: "unmounted reference is empty")
+  var connection = key.connect(TextFieldHandle(handle))
+  key.current?.focus()
+  require(condition: handle.focused == 1, message: "reference exposes the typed handle")
+  Boolean rejected = false
+  try { key.connect(TextFieldHandle(Handle())) } catch Exception error { rejected = true }
+  require(condition: rejected, message: "a reference cannot attach to two components")
+  connection.close()
+  require(condition: key.current == null, message: "closing detaches the reference")
+  var replacement = key.connect(TextFieldHandle(Handle()))
+  connection.close()
+  require(condition: key.current != null, message: "an old connection cannot detach a replacement")
+  replacement.close()
+}

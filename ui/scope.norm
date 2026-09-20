@@ -1,0 +1,132 @@
+package ui
+
+import std.io.Resource
+import std.io.ResourceOwner
+import std.core.Exception
+import std.core.Unit
+import std.context.withContext
+import std.concurrent.Task
+import std.concurrent.TaskExecutor
+import std.concurrent.TaskScope
+import std.concurrent.startTask
+
+private value Memo<T> { T value }
+
+class ViewScope implements Resource, ResourceOwner, TaskExecutor, TaskScope {
+  private ReactiveRuntime runtime
+  private UiScheduler? scheduler
+  private Map<NodeKey, Any> slots
+  private List<Resource> resources
+  private Boolean closed
+
+  ViewScope(ReactiveRuntime runtime, UiScheduler? scheduler = null) {
+    this.runtime = runtime
+    this.scheduler = scheduler
+    slots = Map<>()
+    resources = []
+    closed = false
+  }
+
+  Void observe(Widget widget) { this.own(WidgetFields(runtime: runtime, widget: widget)) }
+
+  Task<T> start<T>(Function<T()> work) {
+    require(condition: !closed, message: "component scope is closed")
+    var executor = scheduler
+    if executor == null { throw Exception(message: "component scope has no task scheduler") }
+    var task = startTask<T>(work: work, executor: this)
+    try { executor.track(task.termination()!!) }
+    catch Exception failure { task.close() throw failure }
+    task
+  }
+
+  Void dispatch(Function<Void()> action) {
+    require(condition: !closed, message: "component scope is closed")
+    var executor = scheduler
+    if executor == null { throw Exception(message: "component scope has no task scheduler") }
+    executor.later(() {
+      if closed { return }
+      this.execute(action)
+    })
+  }
+
+  State<T> state<T>(NodeKey key, T initial) {
+    return this.remember<State<T>>(key: key, initialize: () { this.createState(initial) })
+  }
+
+  State<T> createState<T>(T initial) {
+    require(condition: !closed, message: "component scope is closed")
+    return State<T>(runtime: runtime, initial: initial)
+  }
+
+  T remember<T>(NodeKey key, Function<T()> initialize) {
+    require(condition: !closed, message: "component scope is closed")
+    if slots.containsKey(key) {
+      return switch slots[key] {
+        case Memo<T> stored { break stored.value }
+        case _ { throw Exception(message: "component slot type changed: " + keyText(key)) }
+      }
+    }
+    T created = initialize()
+    slots.put(key: key, value: Memo<T>(value: created))
+    return created
+  }
+
+  Void own(Resource resource) {
+    if closed {
+      resource.close()
+      throw Exception(message: "component scope is closed")
+    }
+    resources.add(resource)
+  }
+
+  Void release(Resource resource) {
+    resources = [for (owned : resources) if (owned != resource) owned]
+  }
+
+  Function<Void()> bind(Function<Void()> action) {
+    () {
+      if closed { return }
+      try {
+        this.execute(action)
+      } catch Exception error { this.report(error) }
+    }
+  }
+
+  R within<R>(Function<R()> action) {
+    withContext<ResourceOwner, R>(value: this, action: () {
+      withContext<TaskScope, R>(value: this, action: () {
+        withContext<ViewScope, R>(value: this, action: action)
+      })
+    })
+  }
+
+  Void execute(Function<Void()> action) {
+    this.within<Unit>(() { runtime.batch(action) Unit.Value })
+  }
+
+  Void report(Exception error) {
+    var executor = scheduler
+    if executor == null { throw error }
+    executor.report(error)
+  }
+
+  Function<Void(T)> bind<T>(Function<Void(T)> action) {
+    (T value) {
+      if closed { return }
+      try {
+        this.execute(() { action(value) })
+      } catch Exception error { this.report(error) }
+    }
+  }
+
+  Void close() {
+    if closed {
+      return
+    }
+    closed = true
+    slots = Map<>()
+    List<Resource> owned = resources
+    resources = []
+    closeResources(owned)
+  }
+}

@@ -1,0 +1,11 @@
+package ui
+
+import std.core.Exception
+import std.core.Unit
+import std.concurrent.Task
+
+interface UiScheduler {
+  Void track(Task<Unit> termination)
+  Void later(Function<Void()> action)
+  Void report(Exception error) { throw error }
+}

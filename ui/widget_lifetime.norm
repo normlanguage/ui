@@ -1,0 +1,44 @@
+package ui
+
+import std.io.Resource
+import di.Container
+
+class WidgetLifetime implements Resource {
+  private Widget widget
+  private ViewScope scope
+  private Container? container
+  private Boolean closed
+
+  WidgetLifetime(Widget widget, ViewScope scope, Container? container = null) {
+    this.widget = widget
+    this.scope = scope
+    this.container = container
+    closed = false
+  }
+
+  Void initialize() {
+    container?.inject<Widget>(widget)
+    if !classOf(widget).isValue() { scope.observe(widget) }
+    scope.execute(() { widget.init() })
+  }
+
+  Boolean owns(Widget candidate) { classOf(widget) == classOf(candidate) }
+
+  Void update(Widget candidate) {
+    if classOf(widget).isValue() {
+      widget = candidate
+    } else if widget != candidate {
+      for field : classOf(widget).fields() {
+        if field.isPublic() { field.copy(target: widget, source: candidate) }
+      }
+    }
+  }
+
+  Widget build() { widget.build() }
+
+  Void close() {
+    if closed { return }
+    closed = true
+    scope.execute(() { widget.dispose() })
+  }
+}

@@ -1,0 +1,21 @@
+package ui
+
+import std.io.Resource
+import std.observation.observeFields
+
+class WidgetFields implements Resource {
+  private Resource subscription
+
+  WidgetFields(ReactiveRuntime runtime, Widget widget) {
+    Map<Integer, TrackedDependency> fields = Map<>()
+    Function<TrackedDependency(Integer)> dependency = (Integer field) {
+      if !fields.containsKey(field) { fields.put(key: field, value: TrackedDependency(runtime)) }
+      fields[field]
+    }
+    subscription = observeFields<Widget>(target: widget,
+      read: (Integer field) { dependency(field).track() },
+      changed: (Integer field) { dependency(field).changed() })
+  }
+
+  Void close() { subscription.close() }
+}

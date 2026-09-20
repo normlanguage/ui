@@ -1,0 +1,113 @@
+package ui
+
+import std.core.Exception
+import ui.fx.FxApplication
+import ui.fx.FxNode
+import std.core.Unit
+import std.concurrent.Task
+
+class JavaFxScheduler implements UiScheduler {
+  private FxApplication application
+  JavaFxScheduler(FxApplication application) { this.application = application }
+
+  Void track(Task<Unit> termination) { application.trackTermination(termination) }
+
+  Void later(Function<Void()> action) { application.later(action) }
+  Void report(Exception error) { application.reportFailure(error.message) }
+}
+
+class JavaFxBackend implements RenderBackend {
+  private FxApplication application
+
+  JavaFxBackend(FxApplication application) { this.application = application }
+
+  RenderNode create(ViewContent content) {
+    FxNode node = switch content {
+      case Text(_) { break application.text() }
+      case Button(_, _) { break application.button() }
+      case Input(_, _, _) { break application.input() }
+      case Toggle(_, _) { break application.toggle() }
+      case Column(_) { break application.column() }
+      case Row(_) { break application.row() }
+      case Scroll(_) { break application.scroll() }
+      case Component(_, _) { break application.component() }
+      case WidgetObject(_) { break application.component() }
+    }
+    FxRenderNode(node)
+  }
+}
+
+class FxRenderNode implements TextFieldRenderNode {
+  private FxNode peer
+
+  FxRenderNode(FxNode peer) { this.peer = peer }
+
+  FxNode handle() { return peer }
+  TextFieldHandle textFieldHandle() { TextFieldHandle(FxTextFieldControl(peer)) }
+
+  Void update(View view) {
+    peer.enabled(view.enabled)
+    String role = switch view.role {
+      case Default { break "default" }
+      case Title { break "title" }
+      case Muted { break "muted" }
+      case Primary { break "primary" }
+      case Destructive { break "destructive" }
+      case Card { break "card" }
+    }
+    String identity = switch view.key {
+      case Named(String value) { break value }
+      case Id(Integer value) { break value.toString() }
+      case _ { break "" }
+    }
+    peer.appearance(role: role, key: identity)
+    switch view.content {
+      case Text(String text) { peer.text(text) }
+      case Button(String text, Function<Void()> action) {
+        peer.text(text)
+        peer.onAction(action)
+      }
+      case Input(String placeholder, Binding<String>? text, Function<Void(String)> submit) {
+        peer.placeholder(placeholder)
+        if text != null {
+          peer.text(text.value)
+          peer.onText((value) { text.value = value })
+        } else {
+          peer.onText((value) {})
+        }
+        peer.onAction(() { submit(this.textFieldHandle().text) })
+      }
+      case Toggle(String text, Binding<Boolean> checked) {
+        peer.text(text)
+        peer.checked(checked.value)
+        peer.onToggle((value) { checked.value = value })
+      }
+      case _ {}
+    }
+  }
+
+  Void children(List<RenderNode> children) {
+    List<FxNode> nodes = []
+    for child : children { nodes.add(fxHandle(child)) }
+    peer.children(nodes)
+  }
+
+  Void close() { peer.close() }
+}
+
+class FxTextFieldControl implements TextFieldControl {
+  private FxNode peer
+  FxTextFieldControl(FxNode peer) { this.peer = peer }
+  String readText() {
+    peer.readText()
+  }
+  Void clear() { peer.clear() }
+  Void focus() { peer.focus() }
+}
+
+FxNode fxHandle(RenderNode node) {
+  return switch node {
+    case FxRenderNode mounted { break mounted.handle() }
+    case _ { throw Exception(message: "node belongs to a different rendering backend") }
+  }
+}

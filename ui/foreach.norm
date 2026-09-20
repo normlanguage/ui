@@ -1,0 +1,42 @@
+package ui
+
+import std.annotation.IdentityField
+import std.core.Exception
+
+interface ItemKey {}
+value ValueKey<T> implements ItemKey { T value }
+private value EntityKey implements ItemKey { List<FieldIdentity> fields }
+
+value ForEach<T> implements WidgetCollection {
+  private List<T> items
+  private Function<Widget(T)> child
+  private Function<ItemKey(T)> identity
+
+  ForEach(List<T> items, Widget child(T task)) {
+    this.items = items
+    this.child = child
+    identity = (T item) { entityIdentity(item) }
+  }
+
+  ForEach(List<T> items, Function<ItemKey(T)> identity, Widget child(T task)) {
+    this.items = items
+    this.child = child
+    this.identity = identity
+  }
+
+  List<Widget> widgets() {
+    List<Widget> result = []
+    for item : items {
+      var view = widgetView(child(item))
+      result.add(View(content: view.content, key: NodeKey.Item(identity(item)), enabled: view.enabled, role: view.role, reference: view.reference))
+    }
+    result
+  }
+}
+
+private ItemKey entityIdentity<T>(T item) {
+  List<FieldIdentity> fields = [for (field : classOf(item).fields())
+    if (field.hasAnnotation(IdentityField.class)) field.identity(item)]
+  if fields.size() == 0 { throw Exception(message: "ForEach requires identity metadata or an explicit identity selector") }
+  EntityKey(fields)
+}

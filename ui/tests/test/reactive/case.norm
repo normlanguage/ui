@@ -1,0 +1,121 @@
+package ui.test.reactive
+
+import std.testing.Test
+import ui.ReactiveRuntime
+import ui.binding
+import ui.State
+import ui.Computed
+import std.core.Exception
+
+class Observations {
+  List<Integer> values
+}
+
+@Test
+Void readsCurrentDerivedValuesInsideNestedBatches() {
+  var runtime = ReactiveRuntime()
+  var count = State<Integer>(runtime: runtime, initial: 1)
+  var doubled = Computed<Integer>(runtime: runtime, compute: () { count.value * 2 })
+  var total = Computed<Integer>(runtime: runtime, compute: () { doubled.value + 1 })
+  runtime.batch(() {
+    runtime.batch(() {
+      count.value = (5)
+      require(condition: total.value == 11, message: "derived read sees current writes")
+    })
+  })
+  runtime.close()
+}
+
+@Test
+Void cleansUpAnObserverWhoseInitialEvaluationFails() {
+  var runtime = ReactiveRuntime()
+  var count = State<Integer>(runtime: runtime, initial: 0)
+  var seen = Observations(values: [])
+  try {
+    runtime.observe(() {
+      seen.values.add(count.value)
+      throw Exception(message: "initial evaluation failed")
+    })
+  } catch Exception failure {
+    require(condition: failure.message == "initial evaluation failed", message: "original error")
+  }
+  count.value = (1)
+  require(condition: seen.values == [0], message: "failed observer detached")
+  runtime.close()
+}
+
+@Test
+Void settlesDerivedValuesBeforeNotifyingViews() {
+  var runtime = ReactiveRuntime()
+  var count = State<Integer>(runtime: runtime, initial: 1)
+  var doubled = Computed<Integer>(runtime: runtime, compute: () { count.value * 2 })
+  var seen = Observations(values: [])
+  runtime.observe(() {
+    seen.values.add(count.value + doubled.value)
+  })
+  runtime.batch(() {
+    count.value = (2)
+    count.value = (3)
+  })
+  require(condition: seen.values == [3, 9], message: "derived values settle before rendering")
+  runtime.close()
+}
+
+@Test
+Void tracksOnlyDependenciesReadByTheLatestEvaluation() {
+  var runtime = ReactiveRuntime()
+  var left = State<Integer>(runtime: runtime, initial: 1)
+  var right = State<Integer>(runtime: runtime, initial: 10)
+  var selection = State<Boolean>(runtime: runtime, initial: true)
+  var seen = Observations(values: [])
+  var reaction = runtime.observe(() {
+    if selection.value {
+      seen.values.add(left.value)
+    } else {
+      seen.values.add(right.value)
+    }
+  })
+  left.value = (2)
+  selection.value = (false)
+  left.value = (3)
+  right.value = (11)
+  require(condition: seen.values == [1, 2, 10, 11], message: "dynamic dependencies")
+  reaction.close()
+  right.value = (12)
+  require(condition: seen.values == [1, 2, 10, 11], message: "disposed subscription")
+  runtime.close()
+}
+
+@Test
+Void coalescesWritesAndPreservesOneBindingSource() {
+  var runtime = ReactiveRuntime()
+  var count = State<Integer>(runtime: runtime, initial: 0)
+  var seen = Observations(values: [])
+  var reaction = runtime.observe(() {
+    seen.values.add(count.value)
+  })
+  var binding = count.binding()
+  runtime.batch(() {
+    count.value = (1)
+    binding.value = (2)
+    count.value = (2)
+    require(condition: binding.value == 2, message: "binding reads source")
+  })
+  require(condition: seen.values == [0, 2], message: "one notification per batch")
+  runtime.close()
+  count.value = (3)
+  require(condition: seen.values == [0, 2], message: "scope closes reactions")
+}
+
+class EditableTitle { String title = "before" }
+
+@Test
+Void bindsPersistentFieldStorage() {
+  var model = EditableTitle()
+  var text = binding(model.title)
+  require(condition: text.value == "before", message: "reads model field")
+  text.value = "after"
+  require(condition: model.title == "after", message: "writes model field")
+  model.title = "direct"
+  require(condition: text.value == "direct", message: "binding remains live")
+}

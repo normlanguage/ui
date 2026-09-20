@@ -1,0 +1,216 @@
+package ui
+
+import std.io.Resource
+import std.collections.listContains
+import std.core.Exception
+
+class ReactiveRuntime implements Resource {
+  private Reaction? active
+  private List<Reaction> pending
+  private List<Reaction> derivations
+  private List<Reaction> reactions
+  private Integer depth
+  private Boolean flushing
+  private Boolean closed
+
+  ReactiveRuntime() {
+    active = null
+    pending = []
+    derivations = []
+    reactions = []
+    depth = 0
+    flushing = false
+    closed = false
+  }
+
+  Resource observe(Function<Void()> action) {
+    return this.register(action: action, derived: false)
+  }
+
+  Resource derive(Function<Void()> action) {
+    return this.register(action: action, derived: true)
+  }
+
+  private Resource register(Function<Void()> action, Boolean derived) {
+    require(condition: !closed, message: "reactive scope is closed")
+    var reaction = Reaction(runtime: this, action: action, derived: derived)
+    reactions.add(reaction)
+    try {
+      this.evaluate(reaction)
+    } catch Exception failure {
+      reaction.close()
+      throw failure
+    }
+    return reaction
+  }
+
+  Void track(Dependency dependency) {
+    var observer = active
+    if observer != null {
+      observer.track(dependency)
+    }
+  }
+
+  Void enqueue(Reaction reaction) {
+    if !closed {
+      if reaction.derived() {
+        if !listContains(values: derivations, target: reaction) {
+          derivations.add(reaction)
+        }
+      } else {
+        if !listContains(values: pending, target: reaction) {
+          pending.add(reaction)
+        }
+      }
+    }
+  }
+
+  Void evaluate(Reaction reaction) {
+    var previous = active
+    active = reaction
+    try {
+      reaction.evaluate()
+    } finally {
+      active = previous
+    }
+  }
+
+  Void batch(Function<Void()> action) {
+    depth = depth + 1
+    try {
+      action()
+    } finally {
+      depth = depth - 1
+      this.flush()
+    }
+  }
+
+  Void flush() {
+    if depth != 0 || flushing || closed {
+      return
+    }
+    flushing = true
+    try {
+      for pending.size() > 0 || derivations.size() > 0 {
+        if derivations.size() > 0 {
+          var reaction = derivations.removeLast()
+          this.evaluate(reaction)
+        } else {
+          var reaction = pending.removeLast()
+          this.evaluate(reaction)
+        }
+      }
+    } finally {
+      flushing = false
+    }
+  }
+
+  Void settle() {
+    Boolean previous = flushing
+    flushing = true
+    try {
+      for derivations.size() > 0 {
+        var reaction = derivations.removeLast()
+        this.evaluate(reaction)
+      }
+    } finally {
+      flushing = previous
+    }
+  }
+
+  Void forget(Reaction reaction) {
+    List<Reaction> remaining = []
+    for item : reactions {
+      if item != reaction {
+        remaining.add(item)
+      }
+    }
+    reactions = remaining
+  }
+
+  Void close() {
+    if closed {
+      return
+    }
+    closed = true
+    List<Reaction> work = reactions
+    reactions = []
+    pending = []
+    derivations = []
+    for reaction : work {
+      reaction.close()
+    }
+  }
+}
+
+class State<T> extends TrackedDependency {
+  private T current
+
+  State(ReactiveRuntime runtime, T initial) {
+    super(runtime)
+    current = initial
+  }
+
+  T value {
+    get { this.track() current }
+    set(next) {
+      if current == next { return }
+      current = next
+      this.changed()
+    }
+  }
+
+  Binding<T> binding() {
+    Binding<T>(read: () { this.value }, write: (T next) { this.value = next })
+  }
+}
+
+value Binding<T> {
+  private Function<T()> read
+  private Function<Void(T)> write
+
+  T value {
+    get { return read() }
+    set(next) { write(next) }
+  }
+}
+
+Binding<T> binding<T>(FieldHandle<T> field) {
+  Binding<T>(read: () { field.read() }, write: (T value) { field.write(value) })
+}
+
+private enum ComputedValue<T> { Empty, Ready(T result) }
+
+class Computed<T> implements Resource {
+  private ReactiveRuntime runtime
+  private State<ComputedValue<T>> current
+  private Resource? subscription
+
+  Computed(ReactiveRuntime runtime, Function<T()> compute) {
+    this.runtime = runtime
+    current = State<ComputedValue<T>>(runtime: runtime, initial: ComputedValue<T>.Empty)
+    subscription = null
+    subscription = runtime.derive(() {
+      current.value = (ComputedValue<T>.Ready(compute()))
+    })
+  }
+
+  T value {
+    get {
+      runtime.settle()
+      return switch current.value {
+        case Ready(T result) { break result }
+        case Empty { throw Exception(message: "computed value is not initialized") }
+      }
+    }
+  }
+
+  Void close() {
+    var resource = subscription
+    subscription = null
+    if resource != null {
+      resource.close()
+    }
+  }
+}
+

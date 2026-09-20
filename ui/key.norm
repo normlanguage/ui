@@ -1,0 +1,24 @@
+package ui
+
+import std.io.Resource
+import std.core.Exception
+
+value TextFieldHandle {
+  private TextFieldControl control
+
+  String text { get { control.readText() } }
+  Void clear() { control.clear() }
+  Void focus() { control.focus() }
+}
+
+class Key<T> {
+  private T? attached = null
+
+  T? current { get { attached } }
+
+  Resource connect(T handle) {
+    if attached != null { throw Exception(message: "key is already connected to a component") }
+    attached = handle
+    KeyConnection(release: () { attached = null })
+  }
+}

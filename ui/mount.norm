@@ -1,0 +1,199 @@
+package ui
+
+import std.io.Resource
+import std.core.Exception
+import di.Container
+
+private enum MountIdentity { Explicit(NodeKey value), Position(Integer value) }
+
+class MountedView implements Resource {
+  private RenderBackend backend
+  private UiScheduler? scheduler
+  private Container? container
+  private ReactiveRuntime runtime
+  private ViewScope scope
+  private State<View> description
+  private RenderNode peer
+  private NodeKey? key
+  private String kind
+  private List<MountedView> descendants
+  private Boolean closed
+  private ViewReference? reference
+  private Resource? connection
+  private WidgetLifetime? lifecycle
+
+  MountedView(RenderBackend backend, ReactiveRuntime runtime, View view, UiScheduler? scheduler = null, Container? container = null) {
+    this.backend = backend
+    this.scheduler = scheduler
+    this.container = container
+    this.runtime = runtime
+    scope = ViewScope(runtime: runtime, scheduler: scheduler)
+    description = State<View>(runtime: runtime, initial: view)
+    key = view.key
+    kind = viewKind(view.content)
+    descendants = []
+    closed = false
+    reference = null
+    connection = null
+    lifecycle = null
+    peer = backend.create(view.content)
+    scope.own(peer)
+    try {
+      switch view.content {
+        case WidgetObject(Widget widget) {
+          var lifetime = WidgetLifetime(widget: widget, scope: scope, container: container)
+          lifecycle = lifetime
+          scope.own(lifetime)
+          lifetime.initialize()
+        }
+        case _ {}
+      }
+      scope.own(runtime.observe(() { this.refresh() }))
+    } catch Exception failure {
+      this.close()
+      throw failure
+    }
+  }
+
+  Boolean accepts(View view) {
+    var lifetime = lifecycle
+    if lifetime != null {
+      switch view.content {
+        case WidgetObject(Widget widget) { if !lifetime.owns(widget) { return false } }
+        case _ { return false }
+      }
+    }
+    return key == view.key && kind == viewKind(view.content)
+  }
+
+  RenderNode node() { return peer }
+
+  Void update(View view) {
+    runtime.batch(() {
+      switch view.content {
+        case WidgetObject(Widget widget) { lifecycle!!.update(widget) }
+        case _ {}
+      }
+      description.value = (view)
+    })
+  }
+
+  private Void refresh() {
+    if closed { return }
+    var view = description.value
+    List<View> children = switch view.content {
+      case Column(List<View> children) { break children }
+      case Row(List<View> children) { break children }
+      case Scroll(View child) { break [child] }
+      case Component(_, Function<View(ViewScope)> body) {
+        break [scope.within<View>(() { body(scope) })]
+      }
+      case WidgetObject(Widget widget) {
+        break [scope.within<View>(() { widgetView(lifecycle!!.build()) })]
+      }
+      case _ { break [] }
+    }
+    Map<NodeKey, Boolean> keys = Map<>()
+    for child : children {
+      var childKey = child.key
+      if childKey != null {
+        if keys.containsKey(childKey) {
+          throw Exception(message: "duplicate child key: " + keyText(childKey))
+        }
+        keys.put(key: childKey, value: true)
+      }
+    }
+    peer.update(view)
+    var nextReference = view.reference
+    if reference != nextReference {
+      Resource? attached = null
+      if nextReference != null { attached = nextReference.connect(peer) }
+      var previousConnection = connection
+      connection = attached
+      reference = nextReference
+      if previousConnection != null { previousConnection.close() }
+    }
+    Map<MountIdentity, MountedView> previous = Map<>()
+    Integer oldIndex = 0
+    for child : descendants {
+      var identity = mountIdentity(key: child.key, index: oldIndex)
+      previous.put(key: identity, value: child)
+      oldIndex = oldIndex + 1
+    }
+    List<MountedView> next = []
+    List<RenderNode> nodes = []
+    Map<MountIdentity, Boolean> retained = Map<>()
+    Integer index = 0
+    List<Resource> created = []
+    try {
+      for child : children {
+        var identity = mountIdentity(key: child.key, index: index)
+        MountedView? mounted = null
+        if previous.containsKey(identity) {
+          var candidate = previous[identity]
+          if candidate.accepts(child) {
+            mounted = candidate
+            retained.put(key: identity, value: true)
+            candidate.update(child)
+          }
+        }
+        MountedView resolved = switch mounted {
+          case MountedView existing { break existing }
+          case _ {
+            var fresh = MountedView(backend: backend, runtime: runtime, view: child, scheduler: scheduler, container: container)
+            created.add(fresh)
+            break fresh
+          }
+        }
+        next.add(resolved)
+        nodes.add(resolved.node())
+        index = index + 1
+      }
+      peer.children(nodes)
+    } catch Exception failure {
+      try { closeResources(created) } catch Exception cleanupFailure {}
+      throw failure
+    }
+    descendants = next
+    List<Resource> removed = []
+    for entry : previous {
+      if !retained.containsKey(entry.first) { removed.add(entry.second) }
+    }
+    closeResources(removed)
+  }
+
+  Void close() {
+    if closed { return }
+    closed = true
+    List<Resource> owned = []
+    for child : descendants { owned.add(child) }
+    descendants = []
+    owned.add(scope)
+    var attached = connection
+    connection = null
+    reference = null
+    if attached != null { owned.add(attached) }
+    closeResources(owned)
+  }
+}
+
+private MountIdentity mountIdentity(NodeKey? key, Integer index) {
+  return switch key {
+    case NodeKey explicit { break MountIdentity.Explicit(explicit) }
+    case _ { break MountIdentity.Position(index) }
+  }
+}
+
+String viewKind(ViewContent content) {
+  return switch content {
+    case Text(_) { break "text" }
+    case Button(_, _) { break "button" }
+    case Input(_, _, _) { break "input" }
+    case Toggle(_, _) { break "toggle" }
+    case Column(_) { break "column" }
+    case Row(_) { break "row" }
+    case Scroll(_) { break "scroll" }
+    case Component(String type, _) { break "component:" + type }
+    case WidgetObject(_) { break "widget" }
+  }
+}

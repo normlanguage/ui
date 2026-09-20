@@ -1,0 +1,71 @@
+package ui
+
+import std.io.Resource
+import std.core.Exception
+import di.Container
+
+interface RenderNode extends Resource {
+  Void update(View view)
+  Void children(List<RenderNode> children)
+}
+
+interface RenderBackend {
+  RenderNode create(ViewContent content)
+}
+
+interface TextFieldRenderNode extends RenderNode {
+  TextFieldHandle textFieldHandle()
+}
+
+class Renderer implements Resource {
+  private RenderBackend backend
+  private UiScheduler? scheduler
+  private Container? container
+  private ReactiveRuntime runtime
+  private MountedView? root
+  private Boolean closed
+
+  Renderer(RenderBackend backend, UiScheduler? scheduler = null, Container? container = null) {
+    this.backend = backend
+    this.scheduler = scheduler
+    this.container = container
+    runtime = ReactiveRuntime()
+    root = null
+    closed = false
+  }
+
+  Void render(Widget widget) {
+    require(condition: !closed, message: "renderer is closed")
+    var view = widgetView(widget)
+    var mounted = root
+    if mounted != null {
+      if mounted.accepts(view) {
+        mounted.update(view)
+        return
+      }
+      mounted.close()
+      root = null
+    }
+    root = MountedView(backend: backend, runtime: runtime, view: view, scheduler: scheduler, container: container)
+  }
+
+
+  RenderNode node() {
+    var mounted = root
+    if mounted != null { return mounted.node() }
+    throw Exception(message: "renderer has no root")
+  }
+
+  Void close() {
+    if closed { return }
+    closed = true
+    try {
+      var mounted = root
+      root = null
+      if mounted != null { mounted.close() }
+    } finally {
+      runtime.close()
+    }
+  }
+}
+

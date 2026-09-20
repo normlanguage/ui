@@ -1,0 +1,79 @@
+package ui
+
+import std.io.Resource
+import std.collections.listContains
+
+interface Dependency {
+  Void attach(Reaction reaction)
+  Void detach(Reaction reaction)
+}
+
+class Reaction implements Resource {
+  private ReactiveRuntime runtime
+  private Function<Void()> action
+  private List<Dependency> dependencies
+  private Boolean closed
+  private Boolean derivation
+
+  Reaction(ReactiveRuntime runtime, Function<Void()> action, Boolean derived) {
+    this.runtime = runtime
+    this.action = action
+    dependencies = []
+    closed = false
+    derivation = derived
+  }
+
+  Boolean derived() {
+    return derivation
+  }
+
+  Void track(Dependency dependency) {
+    if !listContains(values: dependencies, target: dependency) {
+      dependencies.add(dependency)
+      dependency.attach(this)
+    }
+  }
+
+  Void evaluate() {
+    if closed {
+      return
+    }
+    this.clear()
+    action()
+  }
+
+  Void clear() {
+    for dependency : dependencies {
+      dependency.detach(this)
+    }
+    dependencies = []
+  }
+
+  Void close() {
+    if !closed {
+      closed = true
+      this.clear()
+      runtime.forget(this)
+    }
+  }
+}
+
+class TrackedDependency implements Dependency {
+  private ReactiveRuntime runtime
+  private List<Reaction> observers = []
+
+  TrackedDependency(ReactiveRuntime runtime) { this.runtime = runtime }
+
+  Void track() { runtime.track(this) }
+
+  Void changed() {
+    for observer : observers { runtime.enqueue(observer) }
+    runtime.flush()
+  }
+
+  Void attach(Reaction reaction) { observers.add(reaction) }
+
+  Void detach(Reaction reaction) {
+    observers = [for (observer : observers) if (observer != reaction) observer]
+  }
+}

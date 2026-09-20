@@ -1,0 +1,60 @@
+package ui.test.reactive
+
+import ui.NodeKey
+
+import std.testing.Test
+import std.core.Exception
+import ui.ReactiveRuntime
+import ui.ViewScope
+
+@Test
+Void initializesRememberedValuesOncePerScope() {
+  var runtime = ReactiveRuntime()
+  var scope = ViewScope(runtime)
+  var seen = Observations(values: [])
+  Integer first = scope.remember(key: NodeKey.Named("model"), initialize: () {
+    seen.values.add(1)
+    return 7
+  })
+  Integer second = scope.remember(key: NodeKey.Named("model"), initialize: () {
+    seen.values.add(2)
+    return 9
+  })
+  require(condition: first == 7 && second == 7 && seen.values == [1], message: "lazy component initialization")
+  scope.close()
+  runtime.close()
+}
+
+@Test
+Void preservesStatePerComponentAndReleasesOwnedSubscriptions() {
+  var runtime = ReactiveRuntime()
+  var first = ViewScope(runtime)
+  var second = ViewScope(runtime)
+  var count = first.state(key: NodeKey.Named("count"), initial: 1)
+  count.value = (2)
+  require(condition: first.state(key: NodeKey.Named("count"), initial: 99).value == 2, message: "preserved state")
+  require(condition: second.state(key: NodeKey.Named("count"), initial: 10).value == 10, message: "component isolation")
+  var seen = Observations(values: [])
+  first.own(runtime.observe(() { seen.values.add(count.value) }))
+  first.close()
+  count.value = (3)
+  require(condition: seen.values == [2], message: "component subscription disposed")
+  second.close()
+  runtime.close()
+}
+
+@Test
+Void rejectsChangingTheTypeOfAStateSlot() {
+  var runtime = ReactiveRuntime()
+  var scope = ViewScope(runtime)
+  scope.state(key: NodeKey.Named("value"), initial: 1)
+  Boolean rejected = false
+  try {
+    scope.state(key: NodeKey.Named("value"), initial: "text")
+  } catch Exception failure {
+    rejected = true
+  }
+  require(condition: rejected, message: "state slot type identity")
+  scope.close()
+  runtime.close()
+}

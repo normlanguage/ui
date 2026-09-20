@@ -1,0 +1,44 @@
+package ui
+
+import std.context.currentContext
+
+Binding<T> componentBinding<T>(Binding<T> source) {
+  Binding<T>(read: () { source.value }, write: componentCallback<T>((T next) { source.value = next }))
+}
+
+Function<Void()> componentCallback(Function<Void()> action) {
+  var scope = currentContext<ViewScope>()
+  if scope == null { return action }
+  scope.bind(action)
+}
+
+Function<Void(T)> componentCallback<T>(Function<Void(T)> action) {
+  var scope = currentContext<ViewScope>()
+  if scope == null { return action }
+  scope.bind<T>(action)
+}
+
+interface NativeWidget extends Widget {
+  View nativeView()
+  Widget build() { this.nativeView() }
+}
+
+View widgetView(Widget widget) {
+  switch widget {
+    case View view { break view }
+    case NativeWidget native { break native.nativeView() }
+    case _ { break View(content: ViewContent.WidgetObject(widget)) }
+  }
+}
+
+interface WidgetCollection extends Widget {
+  List<Widget> widgets()
+  Widget build() { Column(this.widgets()) }
+}
+
+List<View> widgetViews(List<Widget> widgets) {
+  [for (widget : widgets) ...switch widget {
+    case WidgetCollection collection { break widgetViews(collection.widgets()) }
+    case _ { break [widgetView(widget)] }
+  }]
+}

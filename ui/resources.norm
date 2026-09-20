@@ -1,0 +1,19 @@
+package ui
+
+import std.io.Resource
+import std.core.Exception
+
+Void closeResources(List<Resource> resources) {
+  List<Resource> remaining = resources
+  Exception? failure = null
+  for remaining.size() > 0 {
+    var resource = remaining.removeLast()
+    try {
+      resource.close()
+    } catch Exception error {
+      if failure == null { failure = error }
+    }
+  }
+  var error = failure
+  if error != null { throw error }
+}

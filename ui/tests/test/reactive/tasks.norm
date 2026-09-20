@@ -1,0 +1,237 @@
+package ui.test.reactive
+
+import std.concurrent.Task
+import std.core.Unit
+
+import std.testing.Test
+import std.core.Exception
+import ui.UiScheduler
+import ui.ViewScope
+import ui.ReactiveRuntime
+import std.context.currentContext
+import std.concurrent.async
+import std.observation.onChange
+
+class ObservedSource { String title = "before" }
+
+@Test
+Void ownsFieldSubscriptionsAndRestoresTheirComponentContext() {
+  var runtime = ReactiveRuntime()
+  var scope = ViewScope(runtime)
+  var source = ObservedSource()
+  var seen = Observations(values: [])
+  var register = scope.bind(() {
+    source.title.onChange {
+      require(condition: currentContext<ViewScope>() == scope, message: "subscription restores its owner")
+      seen.values.add(1)
+    }
+    return
+  })
+  register()
+  source.title = "after"
+  require(condition: seen.values == [1] && currentContext<ViewScope>() == null, message: "owner context is lexical")
+  scope.close()
+  source.title = "closed"
+  require(condition: seen.values == [1], message: "component disposal releases field subscription")
+  runtime.close()
+}
+
+class TaskQueue implements UiScheduler {
+  List<Task<Unit>> terminations = []
+
+  Void track(Task<Unit> termination) { terminations.add(termination) }
+  Void finishWork() { for signal : terminations { signal.await() } }
+  Void settle() {
+    Integer waited = 0
+    for waited < terminations.size() || deliveries.size() != 0 {
+      for waited < terminations.size() {
+        terminations[waited].await()
+        waited = waited + 1
+      }
+      this.drain()
+    }
+  }
+  List<Function<Void()>> deliveries = []
+  List<String> failures = []
+
+  Void later(Function<Void()> action) { deliveries.add(action) }
+  Void report(Exception error) {
+    require(condition: currentContext<ViewScope>() != null, message: "default reporting restores component context")
+    failures.add(error.message)
+  }
+
+  Void drain() {
+    for deliveries.size() != 0 {
+      var batch = deliveries
+      deliveries = []
+      for action : batch { action() }
+    }
+  }
+}
+
+class TaskResults {
+  List<Integer> values = []
+  List<String> failures = []
+}
+
+@Test
+Void chainsTypedTaskResultsAndRetainsTheComponentOwner() {
+  var scheduler = TaskQueue()
+  var runtime = ReactiveRuntime()
+  var scope = ViewScope(runtime: runtime, scheduler: scheduler)
+  var results = TaskResults()
+  scope.execute(() {
+    Task<Integer> task = async { 41 }
+    task.then { result + 1 }.then {
+      require(condition: currentContext<ViewScope>() == scope, message: "chain restores component context")
+      results.values.add(result)
+    }.error { results.failures.add(failure.message) }
+    require(condition: results.values.size() == 0, message: "registration cannot reenter caller")
+  })
+  scheduler.finishWork()
+  require(condition: results.values.size() == 0, message: "work cannot deliver UI callbacks")
+  scheduler.drain()
+  require(condition: results.values == [42] && results.failures.size() == 0, message: "typed chain delivers once")
+  scope.close()
+  runtime.close()
+}
+
+@Test
+Void sendsWorkAndThenFailuresToTheirErrorCallbacks() {
+  var scheduler = TaskQueue()
+  var runtime = ReactiveRuntime()
+  var scope = ViewScope(runtime: runtime, scheduler: scheduler)
+  var results = TaskResults()
+  scope.execute(() {
+    async<Integer> { throw Exception(message: "query failed") }
+      .then { results.values.add(result) }
+      .error { results.failures.add(failure.message) }
+    async { 7 }.then {
+      throw Exception(message: "callback failed")
+    }.error { results.failures.add(failure.message) }
+    return
+  })
+  scheduler.finishWork()
+  require(condition: results.failures.size() == 0, message: "failures wait for UI delivery")
+  scheduler.drain()
+  require(condition: results.values.size() == 0, message: "failed work skips success callback")
+  require(condition: (results.failures == ["query failed", "callback failed"] || results.failures == ["callback failed", "query failed"]), message: "error receives work and callback failures")
+  require(condition: scheduler.failures.size() == 0, message: "handled failures are not reported twice")
+  scope.close()
+  runtime.close()
+}
+
+@Test
+Void cancelsQueuedChainsWhenTheirComponentIsClosed() {
+  var scheduler = TaskQueue()
+  var runtime = ReactiveRuntime()
+  var scope = ViewScope(runtime: runtime, scheduler: scheduler)
+  var results = TaskResults()
+  scope.execute(() {
+    async { 7 }.then { results.values.add(result) }
+      .error { results.failures.add(failure.message) }
+    return
+  })
+  scheduler.finishWork()
+  scope.close()
+  scheduler.drain()
+  require(condition: results.values.size() == 0 && results.failures.size() == 0, message: "closed component receives no queued callbacks")
+  require(condition: scheduler.terminations[0].completed(), message: "work cleanup completes independently")
+  runtime.close()
+}
+
+
+@Test
+Void reportsUnhandledFailuresAndSuppressesReportsAfterUnmount() {
+  var scheduler = TaskQueue()
+  var runtime = ReactiveRuntime()
+  var scope = ViewScope(runtime: runtime, scheduler: scheduler)
+  scope.execute(() {
+    async<Integer> { throw Exception(message: "database failed") }
+    return
+  })
+  scheduler.finishWork()
+  require(condition: scheduler.failures.size() == 0, message: "default report is queued")
+  scheduler.drain()
+  require(condition: scheduler.failures == ["database failed"], message: "unhandled failure reaches GUI reporter")
+  scope.execute(() {
+    async<Integer> { throw Exception(message: "unmounted") }
+    return
+  })
+  scheduler.finishWork()
+  scope.close()
+  scheduler.drain()
+  require(condition: scheduler.failures == ["database failed"], message: "unmounted component cannot report late failures")
+  runtime.close()
+}
+
+@Test
+Void rejectsAsyncWithoutATaskScope() {
+  var rejected = false
+  try { async { 1 } }
+  catch Exception error { rejected = error.message == "async requires a task scope" }
+  require(condition: rejected, message: "unowned work cannot escape component lifetime")
+}
+
+@Test
+Void submitsNestedAsyncFromItsCompletionContext() {
+  var runtime = ReactiveRuntime()
+  var scheduler = TaskQueue()
+  var scope = ViewScope(runtime: runtime, scheduler: scheduler)
+  var seen = Observations(values: [])
+  scope.execute(() {
+    async { 42 }.then {
+      seen.values.add(result)
+      async { seen.values.add(7) }.then { seen.values.add(8) }
+      return
+    }
+    return
+  })
+  scheduler.settle()
+  require(condition: seen.values == [42, 7, 8], message: "typed and void work support nested async")
+  require(condition: scheduler.failures.size() == 0, message: "nested work succeeds")
+  scope.close()
+  runtime.close()
+}
+
+@Test
+Void restoresComponentContextForRetainedEvents() {
+  var runtime = ReactiveRuntime()
+  var scheduler = TaskQueue()
+  var scope = ViewScope(runtime: runtime, scheduler: scheduler)
+  var seen = Observations(values: [])
+  var event = scope.bind(() {
+    require(condition: currentContext<ViewScope>() == scope, message: "event restores context")
+    async { 42 }.then {
+      require(condition: currentContext<ViewScope>() == scope, message: "result restores context")
+      seen.values.add(result)
+    }
+    return
+  })
+  event()
+  scheduler.settle()
+  require(condition: currentContext<ViewScope>() == null && seen.values == [42], message: "event and result restore caller context")
+  scope.close()
+  event()
+  require(condition: scheduler.terminations.size() == 1, message: "unmounted event cannot create work")
+  runtime.close()
+}
+
+@Test
+Void deliversVoidWorkThroughTheUiQueue() {
+  var runtime = ReactiveRuntime()
+  var scheduler = TaskQueue()
+  var scope = ViewScope(runtime: runtime, scheduler: scheduler)
+  var seen = Observations(values: [])
+  scope.execute(() {
+    async { seen.values.add(1) }.then { seen.values.add(2) }
+    return
+  })
+  scheduler.finishWork()
+  require(condition: seen.values == [1], message: "void work completes before UI delivery")
+  scheduler.drain()
+  require(condition: seen.values == [1, 2], message: "void work delivers once")
+  scope.close()
+  runtime.close()
+}
+
