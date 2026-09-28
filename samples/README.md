@@ -10,4 +10,4 @@ On Windows x64, run from the repository root:
 norm run samples/hello.norm
 ```
 
-The sample declares its `ui@2` dependency in the source file. The UI package resolves JavaFX from Maven Central. See the [UI module](../ui/module.norm) for exported API and [application entry point](../ui/application.norm) for `DesktopApp` and `runApp`.
+The sample declares its `ui` dependency in the source file. The UI package resolves JavaFX from Maven Central. See the [UI module](../ui/module.norm) for exported API and [application entry point](../ui/application.norm) for `DesktopApp` and `runApp`.

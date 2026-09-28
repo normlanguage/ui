@@ -10,4 +10,4 @@
 norm run samples/hello.norm
 ```
 
-示例在源文件内声明 `ui@2` 依赖。UI 包从 Maven Central 解析 JavaFX。公开 API 入口见 [UI 模块](../ui/module.norm)，`DesktopApp` 和 `runApp` 见[应用入口](../ui/application.norm)。
+示例在源文件内声明 `ui` 依赖。UI 包从 Maven Central 解析 JavaFX。公开 API 入口见 [UI 模块](../ui/module.norm)，`DesktopApp` 和 `runApp` 见[应用入口](../ui/application.norm)。
