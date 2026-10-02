@@ -11,9 +11,8 @@ import ui.RenderBackend
 import ui.Renderer
 import ui.View
 import ui.ViewContent
-import ui.TextField
+import ui.TextFieldReference
 import ui.Binding
-import ui.Column
 
 @Test
 Void duplicateReferencesReleasePartiallyMountedInputs() {
@@ -23,10 +22,10 @@ Void duplicateReferencesReleasePartiallyMountedInputs() {
   var value = Binding<String>(read: () { "" }, write: (String next) {})
   Boolean rejected = false
   try {
-    renderer.render(Column([
-      TextField(placeholder: "一", value: value, key: key) {},
-      TextField(placeholder: "二", value: value, key: key) {}
-    ]))
+    renderer.render(View(content: ViewContent.Column([
+      View(content: ViewContent.Input(placeholder: "一", text: value, submit: (String text) {}), reference: TextFieldReference(key)),
+      View(content: ViewContent.Input(placeholder: "二", text: value, submit: (String text) {}), reference: TextFieldReference(key))
+    ])))
   } catch Exception error { rejected = true }
   require(condition: rejected, message: "duplicate mounted references are rejected")
   require(condition: key.current == null, message: "failed mount releases its key")
@@ -59,11 +58,11 @@ Void mountedInputsConnectTransferAndReleaseTheirKeys() {
   var backend = Backend()
   var renderer = Renderer(backend)
   var value = Binding<String>(read: () { "task" }, write: (String next) {})
-  renderer.render(TextField(placeholder: "任务", value: value, key: first) {})
+  renderer.render(View(content: ViewContent.Input(placeholder: "任务", text: value, submit: (String text) {}), reference: TextFieldReference(first)))
   require(condition: first.current != null, message: "mount connects the input handle")
   first.current?.focus()
   require(condition: backend.nodes[0].handle.focused == 1, message: "focus reaches the mounted input")
-  renderer.render(TextField(placeholder: "任务", value: value, key: second) {})
+  renderer.render(View(content: ViewContent.Input(placeholder: "任务", text: value, submit: (String text) {}), reference: TextFieldReference(second)))
   require(condition: first.current == null && second.current != null, message: "rebuild transfers the reference")
   require(condition: backend.nodes.size() == 1, message: "reference transfer preserves the native input")
   renderer.close()

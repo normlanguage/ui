@@ -22,3 +22,24 @@ class Key<T> {
     KeyConnection(release: () { attached = null })
   }
 }
+
+interface ViewReference {
+  Resource connect(RenderNode node)
+}
+
+value TextFieldReference implements ViewReference {
+  Key<TextFieldHandle> key
+
+  Resource connect(RenderNode node) {
+    switch node {
+      case TextFieldRenderNode input { break key.connect(input.textFieldHandle()) }
+      case _ { throw Exception(message: "text field backend does not provide a text field handle") }
+    }
+  }
+}
+
+interface TextFieldControl {
+  String readText()
+  Void clear()
+  Void focus()
+}
