@@ -6,16 +6,14 @@ import ui.ForEach
 import ui.ValueKey
 import std.annotation.IdentityField
 import std.annotation.RuntimeRetention
-import ui.Text
-import ui.Button
-import ui.Column
-import ui.Row
-import ui.Scroll
-import ui.Toggle
-import ui.TextField
 import ui.Binding
 import ui.WidgetRole
 import ui.View
+import ui.text
+import ui.describeChildren
+import ui.describe
+import ui.componentCallback
+import ui.componentBinding
 import ui.ViewContent
 import ui.RenderBackend
 import ui.RenderNode
@@ -39,7 +37,7 @@ class SubscriptionWidget implements Widget {
     }
     if fail { throw Exception(message: "subscription init failed") }
   }
-  Widget build() { Text("subscription") }
+  Widget build() { text("subscription") }
 }
 
 @Test
@@ -50,7 +48,7 @@ Void releasesInitializerSubscriptionsOnUnmountAndFailedInitialization() {
   renderer.render(SubscriptionWidget(source: source, clicks: clicks))
   source.title = "mounted"
   require(condition: clicks.count == 1, message: "mounted observer receives changes")
-  renderer.render(Text("replacement"))
+  renderer.render(text("replacement"))
   source.title = "unmounted"
   require(condition: clicks.count == 1, message: "unmount releases initializer subscription")
   var failed = false
@@ -64,10 +62,10 @@ Void releasesInitializerSubscriptionsOnUnmountAndFailedInitialization() {
 value SubmittedInputPreview implements Widget {
   Clicks clicks
   Widget build() {
-    TextField(placeholder: "任务") {
+    View(content: ViewContent.Input(placeholder: "任务", text: null, submit: componentCallback<String>((String title) {
       require(condition: title == "提交标题", message: "contract supplies String title")
       clicks.count = clicks.count + 1
-    }
+    })))
   }
 }
 
@@ -97,11 +95,11 @@ value BoundInputPreview implements Widget {
   Clicks clicks
   Widget build() {
     var owner = currentContext<ViewScope>()
-    TextField(placeholder: "任务", value: Binding<String>(read: () { "原始标题" }, write: (String next) {
+    View(content: ViewContent.Input(placeholder: "任务", text: componentBinding<String>(Binding<String>(read: () { "原始标题" }, write: (String next) {
       require(condition: currentContext<ViewScope>() == owner && owner != null, message: "editing restores component context")
       require(condition: next == "新标题", message: "editing delivers text")
       clicks.count = clicks.count + 1
-    })) {}
+    })), submit: (String text) {}))
   }
 }
 
@@ -132,10 +130,10 @@ value TogglePreview implements Widget {
   Clicks clicks
   Widget build() {
     var owner = currentContext<ViewScope>()
-    Toggle(text: "完成", checked: false) { checked in
+    View(content: ViewContent.Toggle(text: "完成", checked: componentBinding<Boolean>(Binding<Boolean>(read: () { false }, write: (Boolean checked) {
       require(condition: currentContext<ViewScope>() == owner && owner != null, message: "toggle event restores owner")
       if checked { clicks.count = clicks.count + 1 }
-    }
+    }))))
   }
 }
 
@@ -165,7 +163,7 @@ Void deliversToggleValuesAndSuppressesUnmountedChanges() {
 class FailedLifecycleWidget implements Widget {
   LifecycleCounts counts
   Void init() { throw Exception(message: "initialization failed") }
-  Widget build() { Text("unreachable") }
+  Widget build() { text("unreachable") }
   Void dispose() { counts.disposed = counts.disposed + 1 }
 }
 
@@ -193,7 +191,7 @@ class LifecycleWidget implements Widget {
   Widget build() {
     require(condition: counts.initialized == 1, message: "init precedes build")
     counts.built = counts.built + 1
-    Text("生命周期")
+    text("生命周期")
   }
   Void dispose() {
     require(condition: currentContext<ViewScope>() != null, message: "dispose has component context")
@@ -219,7 +217,7 @@ value ContextButton implements Widget {
   Widget build() {
     var owner = currentContext<ViewScope>()
     require(condition: owner != null, message: "build has a component scope")
-    Button("context") {
+    actionView("context") {
       require(condition: currentContext<ViewScope>() == owner, message: "event restores build scope")
       clicks.count = clicks.count + 1
     }
@@ -271,13 +269,13 @@ class Backend implements RenderBackend {
 value TodoSummary implements Widget {
   Clicks clicks
   Widget build() {
-    Column([
-      Text("待办清单"),
-      Row([
-        for (title : ["第一项", "第二项"]) Text(title),
-        if (clicks.count == 0) Button(text: "添加") { clicks.count = clicks.count + 1 }
+    tree([
+      text("待办清单"),
+      line([
+        for (title : ["第一项", "第二项"]) text(title),
+        if (clicks.count == 0) actionView(text: "添加") { clicks.count = clicks.count + 1 }
       ]),
-      Scroll(Column(children: [Text("底部")], role: WidgetRole.Card))
+      scrollView(tree(children: [text("底部")], role: WidgetRole.Card))
     ])
   }
 }
@@ -305,7 +303,7 @@ Void rendersWidgetObjectsAndInvokesTrailingActions() {
 class FieldCounter implements Widget {
   private Integer count = 0
   Widget build() {
-    Column([Text("count:${count}"), Button("increment") { count = count + 1 }])
+    tree([text("count:${count}"), actionView("increment") { count = count + 1 }])
   }
 }
 
@@ -339,7 +337,7 @@ class ConfiguredCounter implements Widget {
   private Integer count = 0
   Void init() { counts.initialized = counts.initialized + 1 }
   Void dispose() { counts.disposed = counts.disposed + 1 }
-  Widget build() { Column([Text("${title}:${count}"), Button("increment") { count = count + 1 }]) }
+  Widget build() { tree([text("${title}:${count}"), actionView("increment") { count = count + 1 }]) }
 }
 
 @Test
@@ -376,7 +374,7 @@ value ConfiguredLabel implements Widget {
   LifecycleCounts counts
   Void init() { counts.initialized = counts.initialized + 1 }
   Void dispose() { counts.disposed = counts.disposed + 1 }
-  Widget build() { Text(title) }
+  Widget build() { text(title) }
 }
 
 @Test
@@ -413,7 +411,7 @@ Void keepsItemStateWhenReloadedEntitiesAreReordered() {
   var backend = Backend()
   var renderer = Renderer(backend)
   var counts = LifecycleCounts()
-  renderer.render(Column([ForEach(items: [ListRecord(id: 1, title: "first"), ListRecord(id: 2, title: "second")]) {
+  renderer.render(tree([ForEach(items: [ListRecord(id: 1, title: "first"), ListRecord(id: 2, title: "second")]) {
     ConfiguredCounter(title: task.title, counts: counts)
   }]))
   Node? firstLabel = null
@@ -430,7 +428,7 @@ Void keepsItemStateWhenReloadedEntitiesAreReordered() {
     case Node root {
       require(condition: root.descendants.size() == 2, message: "ForEach adds no layout wrapper")
       var first = root.descendants[0]
-      renderer.render(Column([ForEach(items: [ListRecord(id: 2, title: "second new"), ListRecord(id: 1, title: "first new")]) {
+      renderer.render(tree([ForEach(items: [ListRecord(id: 2, title: "second new"), ListRecord(id: 1, title: "first new")]) {
         ConfiguredCounter(title: task.title, counts: counts)
       }]))
       require(condition: root.descendants[1] == first, message: "identity follows reordered entity")
@@ -443,7 +441,7 @@ Void keepsItemStateWhenReloadedEntitiesAreReordered() {
     case _ {}
   }
   require(condition: retained && counts.initialized == 2 && counts.disposed == 0, message: "reloaded entity retains edited state")
-  renderer.render(Column([ForEach(items: [ListRecord(id: 2, title: "remaining")]) {
+  renderer.render(tree([ForEach(items: [ListRecord(id: 2, title: "remaining")]) {
     ConfiguredCounter(title: task.title, counts: counts)
   }]))
   require(condition: counts.initialized == 2 && counts.disposed == 1 && firstLabel!!.closed, message: "removed item releases its state and node")
@@ -456,10 +454,10 @@ Void keepsItemStateWhenReloadedEntitiesAreReordered() {
 Void supportsExplicitTypedIdentitiesAndRejectsDuplicates() {
   var backend = Backend()
   var renderer = Renderer(backend)
-  renderer.render(Row([ForEach(items: ["a", "b"], identity: (String item) { ValueKey(item) }) { Text(task) }]))
+  renderer.render(line([ForEach(items: ["a", "b"], identity: (String item) { ValueKey(item) }) { text(task) }]))
   var rejected = false
   try {
-    renderer.render(Row([ForEach(items: ["a", "a"], identity: (String item) { ValueKey(item) }) { Text(task) }]))
+    renderer.render(line([ForEach(items: ["a", "a"], identity: (String item) { ValueKey(item) }) { text(task) }]))
   } catch Exception failure { rejected = true }
   require(condition: rejected, message: "duplicate typed identities are rejected")
   renderer.close()
@@ -471,11 +469,11 @@ class PendingRecord { @RecordId() Long? id = null }
 Void requiresPersistedOrExplicitItemIdentity() {
   var renderer = Renderer(Backend())
   var missing = false
-  try { renderer.render(Column([ForEach(items: [Clicks()]) { Text("missing") }])) }
+  try { renderer.render(tree([ForEach(items: [Clicks()]) { text("missing") }])) }
   catch Exception failure { missing = true }
   require(condition: missing, message: "missing identity metadata requires a selector")
   var pending = false
-  try { renderer.render(Column([ForEach(items: [PendingRecord()]) { Text("pending") }])) }
+  try { renderer.render(tree([ForEach(items: [PendingRecord()]) { text("pending") }])) }
   catch Exception failure { pending = true }
   require(condition: pending, message: "null generated identities cannot alias")
   renderer.close()
@@ -485,9 +483,9 @@ class CollectionCounter implements Widget {
   private List<Integer> values = []
   private Map<String, Integer> index = Map<String, Integer>()
   Widget build() {
-    Column([
-      Text("collections:${values.size()}:${index.size()}"),
-      Button("append") {
+    tree([
+      text("collections:${values.size()}:${index.size()}"),
+      actionView("append") {
         values.add(1)
         index.put(key: "first", value: values.size())
       }
@@ -538,7 +536,7 @@ class CollectionSubscriptionWidget implements Widget {
       clicks.count = clicks.count + 1
     }
   }
-  Widget build() { Text("collection subscriptions") }
+  Widget build() { text("collection subscriptions") }
 }
 
 @Test
@@ -550,9 +548,14 @@ Void releasesCollectionSubscriptionsWhenTheWidgetUnmounts() {
   source.values.add(1)
   source.index.put(key: "first", value: 1)
   require(condition: clicks.count == 2, message: "mounted collections report changes")
-  renderer.render(Text("replacement"))
+  renderer.render(text("replacement"))
   source.values.add(2)
   source.index.put(key: "second", value: 2)
   require(condition: clicks.count == 2, message: "unmounted collection subscriptions are released")
   renderer.close()
 }
+
+View tree(List<Widget> children, WidgetRole role = WidgetRole.Default) { View(content: ViewContent.Column(describeChildren(children)), role: role) }
+View line(List<Widget> children) { View(content: ViewContent.Row(describeChildren(children))) }
+View scrollView(Widget child) { View(content: ViewContent.Scroll(describe(child))) }
+View actionView(String text, Function<Void()> action) { View(content: ViewContent.Button(text: text, action: componentCallback(action))) }

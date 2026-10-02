@@ -198,6 +198,7 @@ String viewKind(ViewContent content) {
     case Text(_) { break "text" }
     case Button(_, _) { break "button" }
     case Input(_, _, _) { break "input" }
+    case Multiline(_, _, _, _) { break "multiline" }
     case Toggle(_, _) { break "toggle" }
     case Column(_) { break "column" }
     case Row(_) { break "row" }

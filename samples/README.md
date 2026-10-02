@@ -1,13 +1,5 @@
-# UI samples
+# UI core samples
 
-[简体中文](README.zh-CN.md)
+Runnable desktop sample: [ui.fx](https://github.com/normlanguage/ui-fx/tree/main/samples).
 
-[hello.norm](hello.norm) opens a window with a counter. Click **Click me** to increase the displayed count. The ordinary `clicks` field drives the view; the UI library updates it when the field changes.
-
-On Windows x64, run from the repository root:
-
-```shell
-norm run samples/hello.norm
-```
-
-The sample declares its `ui` dependency in the source file. The UI package resolves JavaFX from Maven Central. See the [UI module](../ui/module.norm) for exported API and [application entry point](../ui/application.norm) for `DesktopApp` and `runApp`.
+Core contracts are exercised by [renderer tests](../ui/tests/test/rendering/case.norm), [widget lifecycle tests](../ui/tests/test/objects/case.norm), and [key tests](../ui/tests/test/keys/case.norm).

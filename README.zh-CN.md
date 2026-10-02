@@ -10,6 +10,6 @@
 
 从[窗口与按钮示例](samples/README.zh-CN.md)开始使用。
 
-原生控件扩展入口见 [NativeView 与 Widget 转换](ui/native.norm)，JavaFX 节点桥见 [JavaFX 渲染适配](ui/javafx.norm)。
+原生控件扩展入口见 [NativeView 与 Widget 转换](ui/native.norm)，JavaFX 节点桥见 [JavaFX 渲染适配](https://github.com/normlanguage/ui-fx/blob/main/ui/fx/backend.norm)。
 
-已在 Windows x64 验证 JVM 执行和 Native 应用启动。JavaFX 制品从 Maven Central 解析；Norm 包通过 GitHub Releases 分发。
+核心层提供状态、组件树、渲染协议和生命周期。桌面启动与 JavaFX 实现见 [ui.fx](https://github.com/normlanguage/ui-fx)，页面控件见 [ui.kit](https://github.com/normlanguage/ui-component)。

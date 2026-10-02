@@ -15,6 +15,7 @@ enum ViewContent {
   Text(String text),
   Button(String text, Function<Void()> action),
   Input(String placeholder, Binding<String>? text, Function<Void(String)> submit),
+  Multiline(String placeholder, Binding<String> text, Integer rows, Boolean editable),
   Toggle(String text, Binding<Boolean> checked),
   Column(List<View> children),
   Row(List<View> children),

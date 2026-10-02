@@ -4,6 +4,7 @@ import std.io.Resource
 import std.io.ResourceOwner
 import std.core.Exception
 import std.core.Unit
+import std.context.currentContext
 import std.context.withContext
 import std.concurrent.Task
 import std.concurrent.TaskExecutor
@@ -129,4 +130,20 @@ class ViewScope implements Resource, ResourceOwner, TaskExecutor, TaskScope {
     resources = []
     closeResources(owned)
   }
+}
+
+Binding<T> componentBinding<T>(Binding<T> source) {
+  Binding<T>(read: () { source.value }, write: componentCallback<T>((T next) { source.value = next }))
+}
+
+Function<Void()> componentCallback(Function<Void()> action) {
+  var scope = currentContext<ViewScope>()
+  if scope == null { return action }
+  scope.bind(action)
+}
+
+Function<Void(T)> componentCallback<T>(Function<Void(T)> action) {
+  var scope = currentContext<ViewScope>()
+  if scope == null { return action }
+  scope.bind<T>(action)
 }

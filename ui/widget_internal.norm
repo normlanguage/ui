@@ -1,22 +1,5 @@
 package ui
 
-import std.context.currentContext
-
-Binding<T> componentBinding<T>(Binding<T> source) {
-  Binding<T>(read: () { source.value }, write: componentCallback<T>((T next) { source.value = next }))
-}
-
-Function<Void()> componentCallback(Function<Void()> action) {
-  var scope = currentContext<ViewScope>()
-  if scope == null { return action }
-  scope.bind(action)
-}
-
-Function<Void(T)> componentCallback<T>(Function<Void(T)> action) {
-  var scope = currentContext<ViewScope>()
-  if scope == null { return action }
-  scope.bind<T>(action)
-}
 
 View widgetView(Widget widget) {
   switch widget {
@@ -28,7 +11,7 @@ View widgetView(Widget widget) {
 
 interface WidgetCollection extends Widget {
   List<Widget> widgets()
-  Widget build() { Column(this.widgets()) }
+  Widget build() { View(content: ViewContent.Column(widgetViews(this.widgets()))) }
 }
 
 List<View> widgetViews(List<Widget> widgets) {

@@ -12,13 +12,12 @@ import ui.Renderer
 import ui.ViewScope
 import ui.State
 import ui.Widget
-import ui.Text
 import ui.describe
 
 class MountMutation implements Widget {
   State<Integer> count
   Void init() { if count.value == 0 { count.value = 1 } }
-  Widget build() { Text(text: "child") }
+  Widget build() { View(content: ViewContent.Text("child")) }
 }
 
 @Test

@@ -1,8 +1,8 @@
 Module module() {
   return module(
     name: "ui",
-    version: 5,
-    exports: ["reactive", "scope", "view", "rendering", "application", "widgets", "widget", "foreach", "key", "tasks", "native", "javafx"],
-    dependencies: [dependency(repository: "github", name: "ui.fx", version: 3), dependency(repository: "github", name: "di", version: 3)]
+    version: 6,
+    exports: ["reactive", "scope", "view", "rendering", "widgets", "widget", "foreach", "key", "tasks", "native"],
+    dependencies: [dependency(repository: "github", name: "di", version: 3)]
   )
 }
