@@ -66,13 +66,15 @@ class ReactiveRuntime implements Resource {
   }
 
   Void evaluate(Reaction reaction) {
-    var previous = active
-    active = reaction
-    try {
-      reaction.evaluate()
-    } finally {
-      active = previous
-    }
+    this.batch(() {
+      var previous = active
+      active = reaction
+      try {
+        reaction.evaluate()
+      } finally {
+        active = previous
+      }
+    })
   }
 
   Void batch(Function<Void()> action) {

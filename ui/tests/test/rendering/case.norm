@@ -11,6 +11,36 @@ import ui.RenderNode
 import ui.Renderer
 import ui.ViewScope
 import ui.State
+import ui.Widget
+import ui.Text
+import ui.describe
+
+class MountMutation implements Widget {
+  State<Integer> count
+  Void init() { if count.value == 0 { count.value = 1 } }
+  Widget build() { Text(text: "child") }
+}
+
+@Test
+Void initialMountDefersReactiveUpdatesUntilTheTreeIsOwned() {
+  var backend = RecordingBackend(created: [])
+  var renderer = Renderer(backend)
+  var state = ComponentState(count: null)
+  renderer.render(View(content: ViewContent.Component(type: "root", body: (scope) {
+    var count = scope.state<Integer>(key: NodeKey.Named("count"), initial: 0)
+    state.count = count
+    var title = count.value.toString()
+    View(content: ViewContent.Column([
+      View(content: ViewContent.Text(title)),
+      describe(MountMutation(count: count))
+    ]))
+  })))
+  require(condition: state.count!!.value == 1, message: "child initialization changes parent state")
+  renderer.close()
+  for node : backend.created {
+    require(condition: node.disposed, message: "every node created during mounting belongs to the renderer")
+  }
+}
 
 class ComponentState {
   State<Integer>? count
