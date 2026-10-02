@@ -20,6 +20,7 @@ class JavaFxBackend implements RenderBackend {
   private FxApplication application
 
   JavaFxBackend(FxApplication application) { this.application = application }
+  FxApplication fxApplication() { application }
 
   RenderNode create(ViewContent content) {
     FxNode node = switch content {
@@ -31,18 +32,23 @@ class JavaFxBackend implements RenderBackend {
       case Row(_) { break application.row() }
       case Scroll(_) { break application.scroll() }
       case Component(_, _) { break application.component() }
+      case Native(_) { throw Exception(message: "native views are created by their descriptor") }
       case WidgetObject(_) { break application.component() }
     }
     FxRenderNode(node)
   }
 }
 
-class FxRenderNode implements TextFieldRenderNode {
+interface FxNodePeer extends RenderNode {
+  FxNode fxNode()
+}
+
+class FxRenderNode implements TextFieldRenderNode, FxNodePeer {
   private FxNode peer
 
   FxRenderNode(FxNode peer) { this.peer = peer }
 
-  FxNode handle() { return peer }
+  FxNode fxNode() { return peer }
   TextFieldHandle textFieldHandle() { TextFieldHandle(FxTextFieldControl(peer)) }
 
   Void update(View view) {
@@ -107,7 +113,7 @@ class FxTextFieldControl implements TextFieldControl {
 
 FxNode fxHandle(RenderNode node) {
   return switch node {
-    case FxRenderNode mounted { break mounted.handle() }
+    case FxNodePeer mounted { break mounted.fxNode() }
     case _ { throw Exception(message: "node belongs to a different rendering backend") }
   }
 }

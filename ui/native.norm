@@ -1,0 +1,16 @@
+package ui
+
+interface NativeWidget extends Widget {
+  View nativeView()
+  Widget build() { this.nativeView() }
+}
+
+interface NativeView {
+  String kind()
+  List<View> children()
+  RenderNode create(RenderBackend backend, ViewScope scope)
+}
+
+View describe(Widget widget) { widgetView(widget) }
+
+List<View> describeChildren(List<Widget> children) { widgetViews(children) }
