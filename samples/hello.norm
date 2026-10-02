@@ -17,7 +17,7 @@ class Counter implements Widget {
 }
 
 Module module() {
-  module(dependencies: [dependency(repository: "github", name: "ui", version: 3)])
+  module(dependencies: [dependency(repository: "github", name: "ui", version: 5)])
 }
 
 Void main() {
