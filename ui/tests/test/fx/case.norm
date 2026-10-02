@@ -1,5 +1,6 @@
 package ui.test.fx
 
+import ui.test.extension.mixesAdoptedJavaFxNodesWithBuiltInNodesInARealWindow
 import ui.NodeKey
 
 import std.testing.Test
@@ -162,6 +163,7 @@ Void preservesSelfManagedInputAcrossWidgetRebuilds() {
 @Test
 Void verifiesJavaFxApplications() {
   withFxRuntime(() {
+    mixesAdoptedJavaFxNodesWithBuiltInNodesInARealWindow()
     startsAsyncFromARealComponentInitializer()
     deliversPublicAsyncFromAMountedComponentToJavaFx()
     connectsAComponentOwnedKeyToARealInput()

@@ -1,6 +1,5 @@
 package ui.test.extension
 
-import std.testing.Test
 import std.core.Exception
 import ui.NodeKey
 import ui.View
@@ -15,7 +14,6 @@ import ui.JavaFxScheduler
 import ui.FxNodePeer
 import ui.fx.FxNode
 import ui.fx.FxApplication
-import ui.fx.withFxRuntime
 import ui.fxHandle
 
 class NativeLabel implements NativeView {
@@ -60,25 +58,22 @@ class MountedLabel implements FxNodePeer {
 
 class LabelRecords { List<MountedLabel> nodes = [] }
 
-@Test
 Void mixesAdoptedJavaFxNodesWithBuiltInNodesInARealWindow() {
-  withFxRuntime(() {
-    var application = FxApplication("Native extension verification")
-    var renderer = Renderer(backend: JavaFxBackend(application), scheduler: JavaFxScheduler(application))
-    var records = LabelRecords()
-    application.run(build: () {
-      renderer.render(View(content: ViewContent.Row([
-        View(key: NodeKey.Named("custom"), content: ViewContent.Native(NativeLabel(value: "初始", records: records))),
-        View(key: NodeKey.Named("builtin"), content: ViewContent.Button(text: "动作", action: () {}))
-      ])))
-      application.root(fxHandle(renderer.node()))
-      renderer.render(View(content: ViewContent.Row([
-        View(key: NodeKey.Named("builtin"), content: ViewContent.Button(text: "动作", action: () {})),
-        View(key: NodeKey.Named("custom"), content: ViewContent.Native(NativeLabel(value: "更新", records: records)))
-      ])))
-      require(condition: records.nodes.size() == 1, message: "reorder preserves adopted node beside built-in node")
-      application.close()
-    }, dispose: renderer.close)
-    require(condition: records.nodes[0].closed, message: "renderer releases adopted wrapper")
-  })
+  var application = FxApplication("Native extension verification")
+  var renderer = Renderer(backend: JavaFxBackend(application), scheduler: JavaFxScheduler(application))
+  var records = LabelRecords()
+  application.run(build: () {
+    renderer.render(View(content: ViewContent.Row([
+      View(key: NodeKey.Named("custom"), content: ViewContent.Native(NativeLabel(value: "初始", records: records))),
+      View(key: NodeKey.Named("builtin"), content: ViewContent.Button(text: "动作", action: () {}))
+    ])))
+    application.root(fxHandle(renderer.node()))
+    renderer.render(View(content: ViewContent.Row([
+      View(key: NodeKey.Named("builtin"), content: ViewContent.Button(text: "动作", action: () {})),
+      View(key: NodeKey.Named("custom"), content: ViewContent.Native(NativeLabel(value: "更新", records: records)))
+    ])))
+    require(condition: records.nodes.size() == 1, message: "reorder preserves adopted node beside built-in node")
+    application.close()
+  }, dispose: renderer.close)
+  require(condition: records.nodes[0].closed, message: "renderer releases adopted wrapper")
 }
