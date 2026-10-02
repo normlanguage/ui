@@ -1,0 +1,145 @@
+package ui.test.extension
+
+import std.testing.Test
+import std.io.Resource
+import std.core.Exception
+import ui.NodeKey
+import ui.View
+import ui.ViewContent
+import ui.NativeView
+import ui.ViewScope
+import ui.RenderNode
+import ui.RenderBackend
+import ui.Renderer
+
+class Probe implements NativeView {
+  String identity
+  String label
+  List<View> parts
+  Function<Void()> action
+  ProbeRecords records
+
+  String kind() { identity }
+  List<View> children() { parts }
+  RenderNode create(RenderBackend backend, ViewScope scope) {
+    var node = ProbeNode(scope: scope, label: "", descendants: [], closed: false, callback: null)
+    records.nodes.add(node)
+    node
+  }
+}
+
+class ProbeNode implements RenderNode {
+  ViewScope scope
+  String label
+  List<RenderNode> descendants
+  Boolean closed
+  Function<Void()>? callback
+
+  Void update(View view) {
+    switch view.content {
+      case Native(NativeView native) {
+        switch native {
+          case Probe probe {
+            label = probe.label
+            callback = scope.bind(probe.action)
+          }
+          case _ {}
+        }
+      }
+      case _ {}
+    }
+  }
+  Void children(List<RenderNode> children) { descendants = children }
+  Void close() { closed = true }
+  Void fire() { var current = callback if current != null { current() } }
+}
+
+class ProbeRecords { List<ProbeNode> nodes = [] }
+
+class PlainNode implements RenderNode {
+  String label
+  List<RenderNode> descendants
+  Boolean closed
+  Void update(View view) {
+    switch view.content {
+      case Text(String value) { label = value }
+      case _ {}
+    }
+  }
+  Void children(List<RenderNode> children) { descendants = children }
+  Void close() { closed = true }
+}
+
+class PlainBackend implements RenderBackend {
+  List<PlainNode> created = []
+  RenderNode create(ViewContent content) {
+    var node = PlainNode(label: "", descendants: [], closed: false)
+    created.add(node)
+    node
+  }
+}
+
+class CallCount { Integer value = 0 }
+
+class OwnedMarker implements Resource {
+  Boolean closed = false
+  Void close() { closed = true }
+}
+
+class FailingNative implements NativeView {
+  OwnedMarker marker
+  String kind() { "failing" }
+  List<View> children() { [] }
+  RenderNode create(RenderBackend backend, ViewScope scope) {
+    scope.own(marker)
+    throw Exception(message: "native creation failed")
+  }
+}
+
+View preview(NodeKey key, Probe probe) { View(key: key, content: ViewContent.Native(probe)) }
+View text(NodeKey key, String value) { View(key: key, content: ViewContent.Text(value)) }
+View row(List<View> parts) { View(content: ViewContent.Row(parts)) }
+
+@Test
+Void mountsNativeViewsAlongsideBuiltinChildrenAndReusesMatchingKeys() {
+  var backend = PlainBackend()
+  var records = ProbeRecords()
+  var calls = CallCount()
+  var key = NodeKey.Named("custom")
+  var renderer = Renderer(backend)
+  renderer.render(row([preview(key: key, probe: Probe(identity: "meter", label: "first", parts: [text(key: NodeKey.Named("caption"), value: "one")], action: () { calls.value = calls.value + 1 }, records: records)), text(key: NodeKey.Named("sibling"), value: "plain")]))
+  require(condition: records.nodes.size() == 1, message: "native descriptor creates one node")
+  var native = records.nodes[0]
+  require(condition: native.label == "first", message: "native node receives descriptor")
+  require(condition: native.descendants.size() == 1, message: "native descendants use normal reconciliation")
+  require(condition: backend.created.size() == 3, message: "built-in row, caption and sibling use backend")
+  var caption = native.descendants[0]
+  native.fire()
+  require(condition: calls.value == 1, message: "native callback reaches application state")
+
+  renderer.render(row([text(key: NodeKey.Named("sibling"), value: "changed"), preview(key: key, probe: Probe(identity: "meter", label: "second", parts: [text(key: NodeKey.Named("caption"), value: "two")], action: () { calls.value = calls.value + 2 }, records: records))]))
+  require(condition: records.nodes.size() == 1, message: "matching key and native kind retain node")
+  require(condition: native.label == "second" && native.descendants[0] == caption, message: "native state and keyed child update")
+  native.fire()
+  require(condition: calls.value == 3, message: "updated action replaces previous action")
+
+  renderer.render(row([preview(key: key, probe: Probe(identity: "other", label: "replacement", parts: [], action: () {}, records: records))]))
+  require(condition: native.closed, message: "kind change releases old native node")
+  require(condition: records.nodes.size() == 2, message: "new native kind creates new node")
+  renderer.close()
+  require(condition: records.nodes[1].closed, message: "closing renderer releases native node")
+  native.fire()
+  require(condition: calls.value == 3, message: "closed scope ignores old callback")
+}
+
+@Test
+Void closesNativeScopeResourcesWhenCreationFails() {
+  var marker = OwnedMarker()
+  var renderer = Renderer(PlainBackend())
+  Boolean failed = false
+  try { renderer.render(View(content: ViewContent.Native(FailingNative(marker: marker)))) }
+  catch Exception error { failed = true }
+  require(condition: failed, message: "native creation failure propagates")
+  require(condition: marker.closed, message: "native scope releases resources created before failure")
+  renderer.close()
+}

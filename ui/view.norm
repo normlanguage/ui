@@ -20,6 +20,7 @@ enum ViewContent {
   Row(List<View> children),
   Scroll(View child),
   Component(String type, Function<View(ViewScope)> body),
+  Native(NativeView value),
   WidgetObject(Widget widget)
 }
 

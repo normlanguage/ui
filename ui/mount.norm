@@ -36,7 +36,15 @@ class MountedView implements Resource {
     reference = null
     connection = null
     lifecycle = null
-    peer = backend.create(view.content)
+    var nativeBackend = backend
+    var nativeScope = scope
+    peer = switch view.content {
+      case Native(NativeView native) {
+        try { break nativeScope.within<RenderNode>(() { native.create(backend: nativeBackend, scope: nativeScope) }) }
+        catch Exception failure { nativeScope.close() throw failure }
+      }
+      case _ { break backend.create(view.content) }
+    }
     scope.own(peer)
     try {
       switch view.content {
@@ -88,6 +96,7 @@ class MountedView implements Resource {
       case Component(_, Function<View(ViewScope)> body) {
         break [scope.within<View>(() { body(scope) })]
       }
+      case Native(NativeView native) { break scope.within<List<View>>(() { native.children() }) }
       case WidgetObject(Widget widget) {
         break [scope.within<View>(() { widgetView(lifecycle!!.build()) })]
       }
@@ -194,6 +203,7 @@ String viewKind(ViewContent content) {
     case Row(_) { break "row" }
     case Scroll(_) { break "scroll" }
     case Component(String type, _) { break "component:" + type }
+    case Native(NativeView native) { break "native:" + native.kind() }
     case WidgetObject(_) { break "widget" }
   }
 }
