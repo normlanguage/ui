@@ -3,6 +3,6 @@ Module module() {
     name: "ui",
     version: 7,
     exports: ["reactive", "scope", "view", "rendering", "widgets", "layout", "layouts", "elements", "widget", "foreach", "key", "tasks", "native", "theme", "configuration"],
-    dependencies: [dependency(repository: "github", name: "theme", version: 1), dependency(repository: "github", name: "di", version: 3)]
+    dependencies: [dependency(repository: "github", name: "theme", version: 2), dependency(repository: "github", name: "di", version: 4)]
   )
 }
