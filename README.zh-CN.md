@@ -10,9 +10,9 @@
 
 运行 `norm run samples/state` 可体验无后端依赖的响应式状态，输出依次为 `2`、`6`。桌面和 Web 示例见[示例索引](samples/README.zh-CN.md)。
 
-原生控件扩展入口见 [NativeView 与 Widget 转换](ui/native.norm)，JavaFX 节点桥见 [JavaFX 渲染适配](https://github.com/normlanguage/ui.fx/blob/main/ui/fx/backend.norm)。
+原生控件扩展入口见 [NativeView 与 Widget 转换](ui/native.norm)，JavaFX 节点桥见 [JavaFX 渲染适配](https://github.com/normlanguage/ui.desktop/blob/main/ui/desktop/backend.norm)。
 
-核心层提供状态、组件树、渲染协议和生命周期。桌面启动与 JavaFX 实现见 [ui.fx](https://github.com/normlanguage/ui.fx)，JavaFX 页面控件见 [ui.fx.kit](https://github.com/normlanguage/ui.fx.kit)，Vaadin Web 后端见 [ui.web](https://github.com/normlanguage/ui.web)。
+核心层提供状态、组件树、渲染协议和生命周期。桌面启动与 JavaFX 实现见 [ui.desktop](https://github.com/normlanguage/ui.desktop)，JavaFX 页面控件见 [ui.desktop.kit](https://github.com/normlanguage/ui.desktop.kit)，Vaadin Web 后端见 [ui.web](https://github.com/normlanguage/ui.web)。
 
 公共布局与约束：[布局协议](ui/layout.norm)、[布局 Widget](ui/layouts.norm)。基础文字与输入：[elements](ui/elements.norm)。
 
