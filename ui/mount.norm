@@ -34,7 +34,7 @@ class MountedView implements Resource {
     this.scheduler = scheduler
     this.container = container
     this.runtime = runtime
-    context = UiContext()
+    context = UiContext(runtime: runtime)
     this.inheritedTheme = inheritedTheme
     this.inheritedConfiguration = inheritedConfiguration
     appliedConfiguration = null
@@ -49,7 +49,7 @@ class MountedView implements Resource {
     connection = null
     lifecycle = null
     context.source = resolveViewTheme(view: view, inherited: inheritedTheme)
-    context.configuration = resolveViewConfiguration(view: view, inherited: inheritedConfiguration)
+    context.configuration.value = resolveViewConfiguration(view: view, inherited: inheritedConfiguration)
     var nativeBackend = backend
     var nativeScope = scope
     peer = switch view.content {
@@ -61,8 +61,7 @@ class MountedView implements Resource {
     }
     scope.own(peer)
     try {
-      this.configure(view)
-      this.bindTheme(view)
+      this.updateEnvironment(view)
       switch view.content {
         case WidgetObject(Widget widget) {
           var lifetime = WidgetLifetime(widget: widget, scope: scope, container: container)
@@ -98,20 +97,32 @@ class MountedView implements Resource {
         case WidgetObject(Widget widget) { lifecycle!!.update(widget) }
         case _ {}
       }
-      this.configure(view)
-      this.bindTheme(view)
+      this.updateEnvironment(view)
       description.value = (view)
     })
   }
 
+  private Void updateEnvironment(View view) {
+    var previousSource = context.source
+    var previousConfiguration = context.configuration.peek()
+    this.configure(view)
+    this.bindTheme(view)
+    if previousSource == context.source && previousConfiguration == context.configuration.peek() { return }
+    for child : descendants {
+      child.inheritedTheme = context.source
+      child.inheritedConfiguration = context.configuration.peek()
+      child.updateEnvironment(child.description.peek())
+    }
+  }
+
   private Void configure(View view) {
-    context.configuration = resolveViewConfiguration(view: view, inherited: inheritedConfiguration)
-    if appliedConfiguration == context.configuration { return }
+    context.configuration.value = resolveViewConfiguration(view: view, inherited: inheritedConfiguration)
+    if appliedConfiguration == context.configuration.peek() { return }
     switch peer {
-      case ConfiguredRenderNode configured { configured.configure(context.configuration) }
+      case ConfiguredRenderNode configured { configured.configure(context.configuration.peek()) }
       case _ {}
     }
-    appliedConfiguration = context.configuration
+    appliedConfiguration = context.configuration.peek()
   }
 
   private Void bindTheme(View view) {
@@ -195,14 +206,14 @@ class MountedView implements Resource {
             mounted = candidate
             retained.put(key: identity, value: true)
             candidate.inheritedTheme = context.source
-            candidate.inheritedConfiguration = context.configuration
+            candidate.inheritedConfiguration = context.configuration.peek()
             candidate.update(child)
           }
         }
         MountedView resolved = switch mounted {
           case MountedView existing { break existing }
           case _ {
-            var fresh = MountedView(backend: backend, runtime: runtime, view: child, scheduler: scheduler, container: container, inheritedTheme: context.source, inheritedConfiguration: context.configuration)
+            var fresh = MountedView(backend: backend, runtime: runtime, view: child, scheduler: scheduler, container: container, inheritedTheme: context.source, inheritedConfiguration: context.configuration.peek())
             created.add(fresh)
             break fresh
           }

@@ -12,6 +12,17 @@ class Observations {
 }
 
 @Test
+Void peeksAtStateWithoutCreatingAReactiveDependency() {
+  var runtime = ReactiveRuntime()
+  var state = State<Integer>(runtime: runtime, initial: 1)
+  var seen = Observations(values: [])
+  runtime.observe(() { seen.values.add(state.peek()) })
+  state.value = 2
+  require(condition: seen.values == [1] && state.peek() == 2, message: "snapshot reads do not subscribe observer")
+  runtime.close()
+}
+
+@Test
 Void readsCurrentDerivedValuesInsideNestedBatches() {
   var runtime = ReactiveRuntime()
   var count = State<Integer>(runtime: runtime, initial: 1)

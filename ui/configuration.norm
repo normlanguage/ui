@@ -31,7 +31,11 @@ interface ConfiguredRenderNode extends RenderNode {
   Void configure(UiConfiguration configuration)
 }
 
-UiConfiguration uiConfiguration() { currentContext<UiContext>()?.configuration ?? UiConfiguration() }
+UiConfiguration uiConfiguration() {
+  var context = currentContext<UiContext>()
+  if context == null { return UiConfiguration() }
+  context.configuration.value
+}
 
 value UiProvider implements NativeWidget, NativeView {
   Widget child

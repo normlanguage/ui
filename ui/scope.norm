@@ -24,7 +24,7 @@ class ViewScope implements Resource, ResourceOwner, TaskExecutor, TaskScope {
   ViewScope(ReactiveRuntime runtime, UiScheduler? scheduler = null, UiContext? context = null) {
     this.runtime = runtime
     this.scheduler = scheduler
-    this.context = context ?? UiContext()
+    this.context = context ?? UiContext(runtime: runtime)
     slots = Map<>()
     resources = []
     closed = false

@@ -14,11 +14,18 @@ import ui.ViewContent
 import ui.ViewScope
 import ui.uiConfiguration
 import ui.componentCallback
+import ui.Widget
 
 class ConfigurationNode implements ConfiguredRenderNode {
   UiConfiguration snapshot = UiConfiguration()
+  String text = ""
   Void configure(UiConfiguration configuration) { snapshot = configuration }
-  Void update(View view) {}
+  Void update(View view) {
+    switch view.content {
+      case Text(String value) { text = value }
+      case _ {}
+    }
+  }
   Void children(List<RenderNode> children) {}
   Void close() {}
 }
@@ -35,6 +42,23 @@ class ConfigurationBackend implements RenderBackend {
 class ConfigurationProbe {
   UiConfiguration observed = UiConfiguration()
   Function<Void()>? callback = null
+}
+
+class ConfigurationCaption implements Widget {
+  Widget build() { View(content: ViewContent.Text(uiConfiguration().fontFamily)) }
+}
+
+@Test
+Void rebuildsMountedWidgetsThatReadConfiguration() {
+  var backend = ConfigurationBackend()
+  var renderer = Renderer(backend)
+  var child = ConfigurationCaption()
+  renderer.render(UiProvider(child: child))
+  var caption = backend.nodes[2]
+  require(condition: caption.text == "System", message: "widget reads initial configuration")
+  renderer.render(UiProvider(child: child, configuration: UiConfiguration(fontFamily: "Arial")))
+  require(condition: caption.text == "Arial" && backend.nodes.size() == 3, message: "configuration reader rebuilds while retaining peer")
+  renderer.close()
 }
 
 @Test
@@ -68,6 +92,11 @@ Void restoresNestedConfigurationInMountedCallbacks() {
   probe.observed = UiConfiguration()
   probe.callback!!()
   require(condition: probe.observed == configuration, message: "mounted callback restores configuration")
+  var replacement = UiConfiguration(fontSize: 16.0, direction: TextDirection.RightToLeft)
+  renderer.render(UiProvider(configuration: replacement, child: UiProvider(child: body)))
+  require(condition: backend.nodes[3].snapshot == replacement && backend.nodes.size() == 4, message: "unchanged intermediate provider propagates configuration without remount")
+  probe.callback!!()
+  require(condition: probe.observed == replacement, message: "retained callback sees updated inherited configuration")
   renderer.close()
 }
 

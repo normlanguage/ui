@@ -3,7 +3,8 @@ package ui
 import theme.ThemeSource
 
 class UiContext {
+  State<UiConfiguration> configuration
   ThemeSource? source = null
-  UiConfiguration configuration = UiConfiguration()
+  UiContext(ReactiveRuntime runtime) { configuration = State<UiConfiguration>(runtime: runtime, initial: UiConfiguration()) }
 }
 

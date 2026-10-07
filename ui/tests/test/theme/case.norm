@@ -110,6 +110,10 @@ Void nestedProvidersIsolateThemesAndRestoreContextForCallbacks() {
   probe.source = null
   probe.callback!!()
   require(condition: probe.source == inner, message: "callback restores mounted theme context")
+  renderer.render(ThemeProvider(source: outer, child: ThemeProvider(child: body)))
+  require(condition: leaf.snapshot == outer.current() && backend.nodes.size() == 4, message: "removing nested source inherits outer source without remount")
+  renderer.render(ThemeProvider(source: inner, child: ThemeProvider(child: body)))
+  require(condition: leaf.snapshot == inner.current() && backend.nodes.size() == 4, message: "unchanged intermediate provider forwards source replacement")
   renderer.close()
   probe.source = null
   probe.callback!!()

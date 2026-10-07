@@ -153,6 +153,8 @@ class State<T> extends TrackedDependency {
     current = initial
   }
 
+  T peek() { current }
+
   T value {
     get { this.track() current }
     set(next) {
