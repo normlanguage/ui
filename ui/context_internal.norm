@@ -1,0 +1,10 @@
+package ui
+
+import ui.theme.ThemeSource
+
+class UiContext {
+  State<UiConfiguration> configuration
+  ThemeSource? source = null
+  UiContext(ReactiveRuntime runtime) { configuration = State<UiConfiguration>(runtime: runtime, initial: UiConfiguration()) }
+}
+

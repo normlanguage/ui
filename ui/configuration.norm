@@ -1,0 +1,50 @@
+package ui
+
+import std.context.currentContext
+import std.core.Exception
+
+enum TextDirection { LeftToRight, RightToLeft }
+
+value UiConfiguration {
+  String fontFamily
+  Double fontSize
+  TextDirection direction
+  Boolean motionEnabled
+
+  UiConfiguration(String fontFamily = "System", Double fontSize = 14.0,
+                  TextDirection direction = TextDirection.LeftToRight, Boolean motionEnabled = true) {
+    if fontFamily.trim() == "" { throw Exception(message: "font family must not be empty") }
+    for character : fontFamily.codePoints() {
+      var scalar = character.scalarValue()
+      if scalar < 32 || scalar >= 127 && scalar <= 159 { throw Exception(message: "font family must not contain control characters") }
+    }
+    if !(fontSize > 0.0 && fontSize <= 1.7976931348623157E308) { throw Exception(message: "font size must be finite and positive") }
+    this.fontFamily = fontFamily
+    this.fontSize = fontSize
+    this.direction = direction
+    this.motionEnabled = motionEnabled
+  }
+}
+
+
+interface ConfiguredRenderNode extends RenderNode {
+  Void configure(UiConfiguration configuration)
+}
+
+UiConfiguration uiConfiguration() {
+  var context = currentContext<UiContext>()
+  if context == null { return UiConfiguration() }
+  context.configuration.value
+}
+
+value UiProvider implements NativeWidget, NativeView {
+  Widget child
+  UiConfiguration? configuration = null
+
+  String kind() { "ui-provider" }
+  View nativeView() { View(content: ViewContent.Native(this)) }
+  List<View> children() { [describe(child)] }
+  RenderNode create(RenderBackend backend, ViewScope scope) {
+    backend.create(ViewContent.Component(type: "ui-provider", body: (ViewScope unused) { describe(child) }))
+  }
+}

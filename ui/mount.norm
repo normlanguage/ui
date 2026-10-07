@@ -1,8 +1,11 @@
 package ui
 
+import std.context.withContext
 import std.io.Resource
 import std.core.Exception
 import di.Container
+import ui.theme.Theme
+import ui.theme.ThemeSource
 
 private enum MountIdentity { Explicit(NodeKey value), Position(Integer value) }
 
@@ -21,13 +24,23 @@ class MountedView implements Resource {
   private ViewReference? reference
   private Resource? connection
   private WidgetLifetime? lifecycle
+  private UiContext context
+  private ThemeSource? inheritedTheme
+  private Resource? themeSubscription
+  private UiConfiguration inheritedConfiguration
+  private UiConfiguration? appliedConfiguration
 
-  MountedView(RenderBackend backend, ReactiveRuntime runtime, View view, UiScheduler? scheduler = null, Container? container = null) {
+  MountedView(RenderBackend backend, ReactiveRuntime runtime, View view, UiScheduler? scheduler = null, Container? container = null, ThemeSource? inheritedTheme = null, UiConfiguration inheritedConfiguration = UiConfiguration()) {
     this.backend = backend
     this.scheduler = scheduler
     this.container = container
     this.runtime = runtime
-    scope = ViewScope(runtime: runtime, scheduler: scheduler)
+    context = UiContext(runtime: runtime)
+    this.inheritedTheme = inheritedTheme
+    this.inheritedConfiguration = inheritedConfiguration
+    appliedConfiguration = null
+    themeSubscription = null
+    scope = withContext<UiContext, ViewScope>(value: context, action: () { ViewScope(runtime: runtime, scheduler: scheduler) })
     description = State<View>(runtime: runtime, initial: view)
     key = view.key
     kind = viewKind(view.content)
@@ -36,6 +49,8 @@ class MountedView implements Resource {
     reference = null
     connection = null
     lifecycle = null
+    context.source = resolveViewTheme(view: view, inherited: inheritedTheme)
+    context.configuration.value = resolveViewConfiguration(view: view, inherited: inheritedConfiguration)
     var nativeBackend = backend
     var nativeScope = scope
     peer = switch view.content {
@@ -47,6 +62,7 @@ class MountedView implements Resource {
     }
     scope.own(peer)
     try {
+      this.updateEnvironment(view)
       switch view.content {
         case WidgetObject(Widget widget) {
           var lifetime = WidgetLifetime(widget: widget, scope: scope, container: container)
@@ -82,17 +98,67 @@ class MountedView implements Resource {
         case WidgetObject(Widget widget) { lifecycle!!.update(widget) }
         case _ {}
       }
+      this.updateEnvironment(view)
       description.value = (view)
     })
+  }
+
+  private Void updateEnvironment(View view) {
+    var previousSource = context.source
+    var previousConfiguration = context.configuration.peek()
+    this.configure(view)
+    this.bindTheme(view)
+    if previousSource == context.source && previousConfiguration == context.configuration.peek() { return }
+    for child : descendants {
+      child.inheritedTheme = context.source
+      child.inheritedConfiguration = context.configuration.peek()
+      child.updateEnvironment(child.description.peek())
+    }
+  }
+
+  private Void configure(View view) {
+    context.configuration.value = resolveViewConfiguration(view: view, inherited: inheritedConfiguration)
+    if appliedConfiguration == context.configuration.peek() { return }
+    switch peer {
+      case ConfiguredRenderNode configured { configured.configure(context.configuration.peek()) }
+      case _ {}
+    }
+    appliedConfiguration = context.configuration.peek()
+  }
+
+  private Void bindTheme(View view) {
+    var source = resolveViewTheme(view: view, inherited: inheritedTheme)
+    if context.source == source && (source == null || themeSubscription != null) { return }
+    var previous = themeSubscription
+    themeSubscription = null
+    if previous != null { scope.release(previous) previous.close() }
+    context.source = source
+    var resolved = source
+    if resolved == null {
+      switch peer {
+        case ThemedRenderNode themed { themed.theme(null) }
+        case _ {}
+      }
+    } else {
+      themeSubscription = scope.within<Resource>(() {
+        var subscription = resolved.watch((Theme snapshot) {
+          switch peer {
+            case ThemedRenderNode themed { themed.theme(snapshot) }
+            case _ {}
+          }
+          return
+        })
+        scope.release(subscription)
+        scope.own(subscription)
+        subscription
+      })
+    }
   }
 
   private Void refresh() {
     if closed { return }
     var view = description.value
     List<View> children = switch view.content {
-      case Column(List<View> children) { break children }
-      case Row(List<View> children) { break children }
-      case Scroll(View child) { break [child] }
       case Component(_, Function<View(ViewScope)> body) {
         break [scope.within<View>(() { body(scope) })]
       }
@@ -143,13 +209,15 @@ class MountedView implements Resource {
           if candidate.accepts(child) {
             mounted = candidate
             retained.put(key: identity, value: true)
+            candidate.inheritedTheme = context.source
+            candidate.inheritedConfiguration = context.configuration.peek()
             candidate.update(child)
           }
         }
         MountedView resolved = switch mounted {
           case MountedView existing { break existing }
           case _ {
-            var fresh = MountedView(backend: backend, runtime: runtime, view: child, scheduler: scheduler, container: container)
+            var fresh = MountedView(backend: backend, runtime: runtime, view: child, scheduler: scheduler, container: container, inheritedTheme: context.source, inheritedConfiguration: context.configuration.peek())
             created.add(fresh)
             break fresh
           }
@@ -177,6 +245,7 @@ class MountedView implements Resource {
     List<Resource> owned = []
     for child : descendants { owned.add(child) }
     descendants = []
+    themeSubscription = null
     owned.add(scope)
     var attached = connection
     connection = null
@@ -200,11 +269,37 @@ String viewKind(ViewContent content) {
     case Input(_, _, _) { break "input" }
     case Multiline(_, _, _, _) { break "multiline" }
     case Toggle(_, _) { break "toggle" }
-    case Column(_) { break "column" }
-    case Row(_) { break "row" }
-    case Scroll(_) { break "scroll" }
     case Component(String type, _) { break "component:" + type }
     case Native(NativeView native) { break "native:" + native.kind() }
     case WidgetObject(_) { break "widget" }
   }
+}
+
+private ThemeSource? resolveViewTheme(View view, ThemeSource? inherited) {
+  ThemeSource? source = inherited
+  switch view.content {
+    case Native(NativeView native) {
+      switch native {
+        case ThemeProvider provider { source = if provider.source != null { provider.source } else { inherited } }
+        case _ {}
+      }
+    }
+    case _ {}
+  }
+  return source
+}
+
+
+private UiConfiguration resolveViewConfiguration(View view, UiConfiguration inherited) {
+  UiConfiguration configuration = inherited
+  switch view.content {
+    case Native(NativeView native) {
+      switch native {
+        case UiProvider provider { configuration = provider.configuration ?? inherited }
+        case _ {}
+      }
+    }
+    case _ {}
+  }
+  configuration
 }

@@ -1,0 +1,219 @@
+package ui
+
+import std.build.BuildWith
+import std.core.Exception
+
+value FlexItem {
+  Widget content
+  Double grow = 0.0
+  Double shrink = 1.0
+}
+
+value Flex implements NativeWidget {
+  List<FlexItem> items
+  Axis axis = Axis.Horizontal
+  MainAlignment main = MainAlignment.Start
+  CrossAlignment cross = CrossAlignment.Start
+  Boolean wrap = false
+  Double gap = 0.0
+  NodeKey? key = null
+  View nativeView() {
+    layoutDistance(gap)
+    for item : items { layoutDistance(item.grow) layoutDistance(item.shrink) }
+    View(key: key, content: ViewContent.Native(LayoutView(
+      specification: LayoutSpec.Flex(axis: axis, gap: gap, main: main, cross: cross, wrap: wrap,
+        items: [for (item : items) FlexSizing(grow: item.grow, shrink: item.shrink)]),
+      content: describeChildren([for (item : items) item.content]))))
+  }
+}
+
+value GridItem { Widget content Integer span = 1 }
+
+value Grid implements NativeWidget {
+  List<GridItem> items
+  Integer columns = 1
+  List<GridBreakpoint> breakpoints = []
+  Double gap = 0.0
+  NodeKey? key = null
+  View nativeView() {
+    layoutDistance(gap)
+    if !(columns > 0) { throw Exception(message: "grid columns must be positive") }
+    for item : items { if item.span < 1 { throw Exception(message: "grid span must be positive") } }
+    var previous = -1.0
+    for point : breakpoints {
+      layoutDistance(point.minimumWidth)
+      if !(point.minimumWidth > previous && point.columns > 0) { throw Exception(message: "grid breakpoints must be increasing with positive columns") }
+      previous = point.minimumWidth
+    }
+    View(key: key, content: ViewContent.Native(LayoutView(
+      specification: LayoutSpec.Grid(columns: columns, gap: gap,
+        items: [for (item : items) GridCell(span: item.span)], breakpoints: breakpoints),
+      content: describeChildren([for (item : items) item.content]))))
+  }
+}
+
+value Box implements NativeWidget {
+  Widget content
+  SizeConstraints size = SizeConstraints()
+  Insets padding = Insets()
+  NodeKey? key = null
+  View nativeView() {
+    layoutDistance(padding.top)
+    layoutDistance(padding.right)
+    layoutDistance(padding.bottom)
+    layoutDistance(padding.left)
+    layoutDistance(size.minWidth)
+    layoutDistance(size.minHeight)
+    var maximumWidth = size.maxWidth
+    var maximumHeight = size.maxHeight
+    if maximumWidth != null { layoutDistance(maximumWidth) if !(maximumWidth >= size.minWidth) { throw Exception(message: "width bounds are reversed") } }
+    if maximumHeight != null { layoutDistance(maximumHeight) if !(maximumHeight >= size.minHeight) { throw Exception(message: "height bounds are reversed") } }
+    for dimension : [size.width, size.height] {
+      switch dimension { case Fixed(Double value) { layoutDistance(value) } case _ {} }
+    }
+    View(key: key, content: ViewContent.Native(LayoutView(specification: LayoutSpec.Box(size: size, padding: padding), content: [describe(content)])))
+  }
+}
+
+value StackLayout implements NativeWidget {
+  List<Widget> children
+  CrossAlignment horizontal = CrossAlignment.Stretch
+  CrossAlignment vertical = CrossAlignment.Stretch
+  NodeKey? key = null
+  View nativeView() {
+    View(key: key, content: ViewContent.Native(LayoutView(specification: LayoutSpec.Stack(horizontal: horizontal, vertical: vertical), content: describeChildren(children))))
+  }
+}
+
+value Dock implements NativeWidget {
+  Widget? top = null
+  Widget? bottom = null
+  Widget? left = null
+  Widget? right = null
+  Widget? center = null
+  NodeKey? key = null
+  View nativeView() {
+    List<View> children = []
+    List<DockArea> areas = []
+    if top != null { children.add(dockSlot(content: top!!, area: "top")) areas.add(DockArea.Top) }
+    if bottom != null { children.add(dockSlot(content: bottom!!, area: "bottom")) areas.add(DockArea.Bottom) }
+    if left != null { children.add(dockSlot(content: left!!, area: "left")) areas.add(DockArea.Left) }
+    if right != null { children.add(dockSlot(content: right!!, area: "right")) areas.add(DockArea.Right) }
+    if center != null { children.add(dockSlot(content: center!!, area: "center")) areas.add(DockArea.Center) }
+    View(key: key, content: ViewContent.Native(LayoutView(specification: LayoutSpec.Dock(areas), content: children)))
+  }
+}
+
+value Scroll implements NativeWidget {
+  Widget child
+  Axis axis = Axis.Vertical
+  Boolean fitWidth = true
+  Boolean fitHeight = false
+  NodeKey? key = null
+  View nativeView() {
+    View(key: key, content: ViewContent.Native(LayoutView(specification: LayoutSpec.Scroll(axis: axis, fitWidth: fitWidth, fitHeight: fitHeight), content: [describe(child)])))
+  }
+}
+
+value Masonry implements NativeWidget {
+  List<Widget> children
+  Double minimumColumnWidth = 180.0
+  Double gap = 0.0
+  NodeKey? key = null
+  View nativeView() {
+    layoutDistance(minimumColumnWidth)
+    layoutDistance(gap)
+    if !(minimumColumnWidth > 0.0) { throw Exception(message: "masonry column width must be positive") }
+    View(key: key, content: ViewContent.Native(LayoutView(specification: LayoutSpec.Masonry(minimumColumnWidth: minimumColumnWidth, gap: gap), content: describeChildren(children))))
+  }
+}
+
+value Row implements NativeWidget {
+  List<Widget> children
+  Double gap
+  MainAlignment main
+  CrossAlignment cross
+  Boolean wrap
+  NodeKey? key
+  WidgetRole role
+  Boolean enabled
+
+  Row(@BuildWith(WidgetBuilder.class) Function<List<Widget>()> content,
+      Double gap = 0.0, MainAlignment main = MainAlignment.Start, CrossAlignment cross = CrossAlignment.Start,
+      Boolean wrap = false, NodeKey? key = null, WidgetRole role = WidgetRole.Default, Boolean enabled = true) {
+    children = content()
+    this.gap = gap
+    this.main = main
+    this.cross = cross
+    this.wrap = wrap
+    this.key = key
+    this.role = role
+    this.enabled = enabled
+  }
+  Row(List<Widget> children, Double gap = 0.0, MainAlignment main = MainAlignment.Start,
+      CrossAlignment cross = CrossAlignment.Start, Boolean wrap = false, NodeKey? key = null,
+      WidgetRole role = WidgetRole.Default, Boolean enabled = true) {
+    this.children = children
+    this.gap = gap
+    this.main = main
+    this.cross = cross
+    this.wrap = wrap
+    this.key = key
+    this.role = role
+    this.enabled = enabled
+  }
+  View nativeView() {
+    layoutDistance(gap)
+    View(key: key, role: role, enabled: enabled, content: ViewContent.Native(LayoutView(
+      specification: LayoutSpec.Flex(axis: Axis.Horizontal, gap: gap, main: main, cross: cross, wrap: wrap,
+        items: [for (child : children) FlexSizing()]), content: describeChildren(children))))
+  }
+}
+
+value Column implements NativeWidget {
+  List<Widget> children
+  Double gap
+  MainAlignment main
+  CrossAlignment cross
+  Boolean wrap
+  NodeKey? key
+  WidgetRole role
+  Boolean enabled
+
+  Column(@BuildWith(WidgetBuilder.class) Function<List<Widget>()> content,
+      Double gap = 0.0, MainAlignment main = MainAlignment.Start, CrossAlignment cross = CrossAlignment.Start,
+      Boolean wrap = false, NodeKey? key = null, WidgetRole role = WidgetRole.Default, Boolean enabled = true) {
+    children = content()
+    this.gap = gap
+    this.main = main
+    this.cross = cross
+    this.wrap = wrap
+    this.key = key
+    this.role = role
+    this.enabled = enabled
+  }
+  Column(List<Widget> children, Double gap = 0.0, MainAlignment main = MainAlignment.Start,
+      CrossAlignment cross = CrossAlignment.Start, Boolean wrap = false, NodeKey? key = null,
+      WidgetRole role = WidgetRole.Default, Boolean enabled = true) {
+    this.children = children
+    this.gap = gap
+    this.main = main
+    this.cross = cross
+    this.wrap = wrap
+    this.key = key
+    this.role = role
+    this.enabled = enabled
+  }
+  View nativeView() {
+    layoutDistance(gap)
+    View(key: key, role: role, enabled: enabled, content: ViewContent.Native(LayoutView(
+      specification: LayoutSpec.Flex(axis: Axis.Vertical, gap: gap, main: main, cross: cross, wrap: wrap,
+        items: [for (child : children) FlexSizing()]), content: describeChildren(children))))
+  }
+}
+
+private View dockSlot(Widget content, String area) {
+  var view = describe(content)
+  View(content: view.content, key: view.key ?? NodeKey.Named("ui.dock." + area),
+    role: view.role, enabled: view.enabled, reference: view.reference)
+}

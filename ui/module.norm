@@ -1,8 +1,8 @@
 Module module() {
   return module(
     name: "ui",
-    version: 6,
-    exports: ["reactive", "scope", "view", "rendering", "widgets", "widget", "foreach", "key", "tasks", "native"],
-    dependencies: [dependency(repository: "github", name: "di", version: 3)]
+    version: 7,
+    exports: ["reactive", "scope", "view", "rendering", "widgets", "layout", "layouts", "elements", "widget", "foreach", "key", "tasks", "native", "theme", "configuration"],
+    dependencies: [dependency(repository: "github", name: "ui.theme", version: 2), dependency(repository: "github", name: "di", version: 4)]
   )
 }

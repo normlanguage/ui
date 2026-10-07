@@ -1,0 +1,102 @@
+package ui.test.layout
+
+import std.testing.Test
+import ui.NativeView
+import ui.FlexSizing
+import ui.LayoutBackend
+import ui.RenderNode
+import ui.Renderer
+import ui.View
+import ui.NodeKey
+import ui.ViewScope
+import ui.test.rendering.RecordingBackend
+import ui.Widget
+import ui.Text
+import ui.Row
+import ui.Flex
+import ui.FlexItem
+import ui.Dock
+import ui.Grid
+import ui.GridItem
+import ui.GridBreakpoint
+import ui.LayoutView
+import ui.LayoutSpec
+import ui.Axis
+import ui.MainAlignment
+import ui.CrossAlignment
+import ui.ViewContent
+import ui.describe
+import std.core.Exception
+
+@Test
+Void rowAndColumnUseOneLayoutProtocol() {
+  var row = Row(gap: 12.0) { Text("one") Text("two") }
+  switch describe(row).content {
+    case Native(NativeView native) {
+      switch native {
+        case LayoutView layout {
+          require(condition: layout.children().size() == 2, message: "builder children reach core layout")
+          switch layout.specification {
+            case Flex(Axis axis, Double gap, _, _, _, List<FlexSizing> items) {
+              require(condition: axis == Axis.Horizontal && gap == 12.0, message: "row describes horizontal flex")
+              require(condition: items.size() == 2, message: "one sizing record per child")
+            }
+            case _ { require(condition: false, message: "row uses flex protocol") }
+          }
+        }
+        case _ { require(condition: false, message: "layout has a common descriptor") }
+      }
+    }
+    case _ { require(condition: false, message: "layout uses native backend protocol") }
+  }
+}
+
+@Test
+Void rejectsInvalidLayoutConstraintsBeforeCreatingNativeNodes() {
+  var rejected = false
+  try { describe(Flex(items: [FlexItem(content: Text("bad"), grow: -1.0)])) }
+  catch Exception error { rejected = true }
+  require(condition: rejected, message: "negative grow rejected by shared API")
+  rejected = false
+  try { describe(Grid(items: [GridItem(content: Text("bad"), span: 0)])) }
+  catch Exception error { rejected = true }
+  require(condition: rejected, message: "invalid grid span rejected by shared API")
+}
+
+class RecordingLayoutBackend implements LayoutBackend {
+  RecordingBackend recording
+  RenderNode create(ViewContent content) { recording.create(content) }
+  RenderNode createLayout(LayoutSpec specification) {
+    this.create(ViewContent.Text("layout"))
+  }
+}
+
+@Test
+Void reorderedFlexChildrenRetainTheirNodesWhenConstraintsChange() {
+  var recording = RecordingBackend(created: [])
+  var backend = RecordingLayoutBackend(recording: recording)
+  var renderer = Renderer(backend)
+  var first = View(key: NodeKey.Named("first"), content: ViewContent.Text("first"))
+  var second = View(key: NodeKey.Named("second"), content: ViewContent.Text("second"))
+  renderer.render(Flex(items: [FlexItem(content: first, grow: 1.0), FlexItem(content: second)]))
+  var parent = renderer.node()
+  var firstNode = recording.created[1]
+  var secondNode = recording.created[2]
+  renderer.render(Flex(axis: Axis.Vertical, gap: 16.0,
+    items: [FlexItem(content: second, grow: 2.0), FlexItem(content: first)]))
+  require(condition: renderer.node() == parent && recording.created.size() == 3, message: "layout changes preserve existing subtree")
+  require(condition: recording.created[0].descendants[0] == secondNode && recording.created[0].descendants[1] == firstNode, message: "stable keys move nodes with their state")
+  renderer.close()
+  require(condition: firstNode.disposed && secondNode.disposed, message: "unmount releases layout children")
+}
+
+@Test
+Void dockKeepsCenterIdentityWhenAnEdgeAppears() {
+  var recording = RecordingBackend(created: [])
+  var renderer = Renderer(RecordingLayoutBackend(recording: recording))
+  renderer.render(Dock(center: Text("center")))
+  var center = recording.created[1]
+  renderer.render(Dock(top: Text("header"), center: Text("center")))
+  require(condition: recording.created[0].descendants[1] == center, message: "dock slots retain identity independently of optional siblings")
+  renderer.close()
+}

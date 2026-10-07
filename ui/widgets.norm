@@ -17,11 +17,11 @@ View toggle(String text, Binding<Boolean> value, NodeKey? key = null, WidgetRole
 }
 
 View column(List<View> children, NodeKey? key = null, WidgetRole role = WidgetRole.Default, Boolean enabled = true) {
-  return View(key: key, role: role, enabled: enabled, content: ViewContent.Column(children))
+  return Column(children: [for (child : children) child], key: key, role: role, enabled: enabled).nativeView()
 }
 
 View row(List<View> children, NodeKey? key = null, WidgetRole role = WidgetRole.Default) {
-  return View(key: key, role: role, content: ViewContent.Row(children))
+  return Row(children: [for (child : children) child], key: key, role: role).nativeView()
 }
 
 View component(String type, Function<View(ViewScope)> body, NodeKey? key = null, WidgetRole role = WidgetRole.Default) {
@@ -29,5 +29,5 @@ View component(String type, Function<View(ViewScope)> body, NodeKey? key = null,
 }
 
 View scroll(View child, NodeKey? key = null) {
-  return View(key: key, content: ViewContent.Scroll(child))
+  return Scroll(child: child, key: key).nativeView()
 }

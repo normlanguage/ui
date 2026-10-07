@@ -1,5 +1,9 @@
 package ui.test.keys
 
+import ui.LayoutBackend
+import ui.LayoutSpec
+import ui.Column
+import ui.describe
 import std.testing.Test
 import std.core.Exception
 import ui.Key
@@ -7,7 +11,6 @@ import ui.TextFieldHandle
 import ui.TextFieldControl
 import ui.TextFieldRenderNode
 import ui.RenderNode
-import ui.RenderBackend
 import ui.Renderer
 import ui.View
 import ui.ViewContent
@@ -22,10 +25,10 @@ Void duplicateReferencesReleasePartiallyMountedInputs() {
   var value = Binding<String>(read: () { "" }, write: (String next) {})
   Boolean rejected = false
   try {
-    renderer.render(View(content: ViewContent.Column([
+    renderer.render(View(content: describe(Column(children: [for (layoutChild : [
       View(content: ViewContent.Input(placeholder: "一", text: value, submit: (String text) {}), reference: TextFieldReference(key)),
       View(content: ViewContent.Input(placeholder: "二", text: value, submit: (String text) {}), reference: TextFieldReference(key))
-    ])))
+    ]) layoutChild])).content))
   } catch Exception error { rejected = true }
   require(condition: rejected, message: "duplicate mounted references are rejected")
   require(condition: key.current == null, message: "failed mount releases its key")
@@ -42,8 +45,10 @@ class InputNode implements TextFieldRenderNode {
   TextFieldHandle textFieldHandle() { TextFieldHandle(handle) }
 }
 
-class Backend implements RenderBackend {
+class Backend implements LayoutBackend {
   List<InputNode> nodes = []
+  RenderNode createLayout(LayoutSpec specification) { this.create(ViewContent.Text("layout")) }
+
   RenderNode create(ViewContent content) {
     var node = InputNode(handle: Handle())
     nodes.add(node)

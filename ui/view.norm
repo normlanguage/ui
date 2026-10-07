@@ -17,9 +17,6 @@ enum ViewContent {
   Input(String placeholder, Binding<String>? text, Function<Void(String)> submit),
   Multiline(String placeholder, Binding<String> text, Integer rows, Boolean editable),
   Toggle(String text, Binding<Boolean> checked),
-  Column(List<View> children),
-  Row(List<View> children),
-  Scroll(View child),
   Component(String type, Function<View(ViewScope)> body),
   Native(NativeView value),
   WidgetObject(Widget widget)
