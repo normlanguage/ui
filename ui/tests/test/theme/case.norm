@@ -2,6 +2,9 @@ package ui.test.theme
 
 import ui.LayoutBackend
 import ui.LayoutSpec
+import std.io.Resource
+import std.io.ResourceOwner
+import std.context.currentContext
 import std.testing.Test
 import ui.Renderer
 import ui.RenderBackend
@@ -146,4 +149,53 @@ Void updatesAndRebindsThemesWithoutRemountingAndReleasesSubscriptions() {
   require(condition: second.current().mode == ThemeMode.Dark, message: "externally owned source survives unmount")
   first.close()
   second.close()
+}
+
+class ManualSource implements ThemeSource {
+  Theme snapshot
+  Boolean register = false
+  List<ManualSubscription> subscriptions = []
+  Theme current() { snapshot }
+  Resource watch(Function<Void(Theme)> changed) {
+    var subscription = ManualSubscription(changed: changed)
+    subscriptions.add(subscription)
+    if register { currentContext<ResourceOwner>()?.own(subscription) }
+    changed(snapshot)
+    subscription
+  }
+  Void emit() { for subscription : subscriptions { subscription.deliver(snapshot) } }
+}
+
+class ManualSubscription implements Resource {
+  Function<Void(Theme)> changed
+  Integer closes = 0
+  Void deliver(Theme snapshot) { if closes == 0 { changed(snapshot) } }
+  Void close() { closes = closes + 1 }
+}
+
+@Test
+Void ownsReturnedThemeSubscriptionsWithoutRequiringAutomaticRegistration() {
+  var manager = ThemeManager(ThemeDefinition(primary: Color(hex: "#1677ff")))
+  var first = ManualSource(snapshot: manager.current())
+  var second = ManualSource(snapshot: manager.current(), register: true)
+  var backend = ThemeBackend()
+  var renderer = Renderer(backend)
+  var child = View(content: ViewContent.Text("retained"))
+  renderer.render(ThemeProvider(source: first, child: child))
+  renderer.render(ThemeProvider(source: second, child: child))
+  for subscription : first.subscriptions {
+    require(condition: subscription.closes == 1, message: "replacing theme closes each old subscription exactly once")
+  }
+  var leaf = backend.nodes[1]
+  renderer.close()
+  var deliveries = leaf.deliveries
+  second.emit()
+  require(condition: leaf.deliveries == deliveries, message: "unmounted theme source cannot project to closed peer")
+  for subscription : first.subscriptions {
+    require(condition: subscription.closes == 1, message: "old subscription is not retained for repeated close")
+  }
+  for subscription : second.subscriptions {
+    require(condition: subscription.closes == 1, message: "unmount closes each custom subscription exactly once")
+  }
+  manager.close()
 }

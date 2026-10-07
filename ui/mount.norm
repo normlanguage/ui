@@ -1,5 +1,6 @@
 package ui
 
+import std.context.withContext
 import std.io.Resource
 import std.core.Exception
 import di.Container
@@ -39,7 +40,7 @@ class MountedView implements Resource {
     this.inheritedConfiguration = inheritedConfiguration
     appliedConfiguration = null
     themeSubscription = null
-    scope = ViewScope(runtime: runtime, scheduler: scheduler, context: context)
+    scope = withContext<UiContext, ViewScope>(value: context, action: () { ViewScope(runtime: runtime, scheduler: scheduler) })
     description = State<View>(runtime: runtime, initial: view)
     key = view.key
     kind = viewKind(view.content)
@@ -130,7 +131,7 @@ class MountedView implements Resource {
     if context.source == source && (source == null || themeSubscription != null) { return }
     var previous = themeSubscription
     themeSubscription = null
-    if previous != null { previous.close() }
+    if previous != null { scope.release(previous) previous.close() }
     context.source = source
     var resolved = source
     if resolved == null {
@@ -140,13 +141,16 @@ class MountedView implements Resource {
       }
     } else {
       themeSubscription = scope.within<Resource>(() {
-        resolved.watch((Theme snapshot) {
+        var subscription = resolved.watch((Theme snapshot) {
           switch peer {
             case ThemedRenderNode themed { themed.theme(snapshot) }
             case _ {}
           }
           return
         })
+        scope.release(subscription)
+        scope.own(subscription)
+        subscription
       })
     }
   }
@@ -241,6 +245,7 @@ class MountedView implements Resource {
     List<Resource> owned = []
     for child : descendants { owned.add(child) }
     descendants = []
+    themeSubscription = null
     owned.add(scope)
     var attached = connection
     connection = null
