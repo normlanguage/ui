@@ -162,7 +162,7 @@ class MountedView implements Resource {
       case Component(_, Function<View(ViewScope)> body) {
         break [scope.within<View>(() { body(scope) })]
       }
-      case Native(NativeView native) { break scope.within<List<View>>(() { native.children() }) }
+      case Native(NativeView native) { break scope.within<List<View>>(() { native.children(peer) }) }
       case WidgetObject(Widget widget) {
         break [scope.within<View>(() { widgetView(lifecycle!!.build()) })]
       }

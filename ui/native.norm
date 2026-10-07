@@ -7,7 +7,7 @@ interface NativeWidget extends Widget {
 
 interface NativeView {
   String kind()
-  List<View> children()
+  List<View> children(RenderNode node)
   RenderNode create(RenderBackend backend, ViewScope scope)
 }
 

@@ -23,7 +23,7 @@ value Flex implements NativeWidget {
     View(key: key, content: ViewContent.Native(LayoutView(
       specification: LayoutSpec.Flex(axis: axis, gap: gap, main: main, cross: cross, wrap: wrap,
         items: [for (item : items) FlexSizing(grow: item.grow, shrink: item.shrink)]),
-      content: describeChildren([for (item : items) item.content]))))
+      content: [for (item : items) describe(item.content)])))
   }
 }
 
@@ -48,7 +48,7 @@ value Grid implements NativeWidget {
     View(key: key, content: ViewContent.Native(LayoutView(
       specification: LayoutSpec.Grid(columns: columns, gap: gap,
         items: [for (item : items) GridCell(span: item.span)], breakpoints: breakpoints),
-      content: describeChildren([for (item : items) item.content]))))
+      content: [for (item : items) describe(item.content)])))
   }
 }
 
@@ -164,9 +164,10 @@ value Row implements NativeWidget {
   }
   View nativeView() {
     layoutDistance(gap)
+    var content = describeChildren(children)
     View(key: key, role: role, enabled: enabled, content: ViewContent.Native(LayoutView(
       specification: LayoutSpec.Flex(axis: Axis.Horizontal, gap: gap, main: main, cross: cross, wrap: wrap,
-        items: [for (child : children) FlexSizing()]), content: describeChildren(children))))
+        items: [for (child : content) FlexSizing()]), content: content)))
   }
 }
 
@@ -206,9 +207,10 @@ value Column implements NativeWidget {
   }
   View nativeView() {
     layoutDistance(gap)
+    var content = describeChildren(children)
     View(key: key, role: role, enabled: enabled, content: ViewContent.Native(LayoutView(
       specification: LayoutSpec.Flex(axis: Axis.Vertical, gap: gap, main: main, cross: cross, wrap: wrap,
-        items: [for (child : children) FlexSizing()]), content: describeChildren(children))))
+        items: [for (child : content) FlexSizing()]), content: content)))
   }
 }
 

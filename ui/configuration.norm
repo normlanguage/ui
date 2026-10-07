@@ -43,7 +43,7 @@ value UiProvider implements NativeWidget, NativeView {
 
   String kind() { "ui-provider" }
   View nativeView() { View(content: ViewContent.Native(this)) }
-  List<View> children() { [describe(child)] }
+  List<View> children(RenderNode node) { [describe(child)] }
   RenderNode create(RenderBackend backend, ViewScope scope) {
     backend.create(ViewContent.Component(type: "ui-provider", body: (ViewScope unused) { describe(child) }))
   }

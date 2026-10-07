@@ -13,10 +13,14 @@ import ui.test.rendering.RecordingBackend
 import ui.Widget
 import ui.Text
 import ui.Row
+import ui.Column
+import ui.ForEach
+import ui.ValueKey
 import ui.Flex
 import ui.FlexItem
 import ui.Dock
 import ui.Grid
+import ui.GridCell
 import ui.GridItem
 import ui.GridBreakpoint
 import ui.LayoutView
@@ -35,7 +39,7 @@ Void rowAndColumnUseOneLayoutProtocol() {
     case Native(NativeView native) {
       switch native {
         case LayoutView layout {
-          require(condition: layout.children().size() == 2, message: "builder children reach core layout")
+          require(condition: layout.content.size() == 2, message: "builder children reach core layout")
           switch layout.specification {
             case Flex(Axis axis, Double gap, _, _, _, List<FlexSizing> items) {
               require(condition: axis == Axis.Horizontal && gap == 12.0, message: "row describes horizontal flex")
@@ -99,4 +103,62 @@ Void dockKeepsCenterIdentityWhenAnEdgeAppears() {
   renderer.render(Dock(top: Text("header"), center: Text("center")))
   require(condition: recording.created[0].descendants[1] == center, message: "dock slots retain identity independently of optional siblings")
   renderer.close()
+}
+
+@Test
+Void collectionsHaveOneSizingRecordPerExpandedChild() {
+  for count : [0, 2] {
+    List<Integer> values = []
+    var index = 0
+    for index < count { values.add(index) index = index + 1 }
+    var collection = ForEach<Integer>(items: values, identity: (Integer item) { ValueKey(item) }, child: (Integer item) { Text("${item}") })
+    List<Widget> layouts = [Row(children: [collection]), Column(children: [collection])]
+    for widget : layouts {
+      switch describe(widget).content {
+        case Native(NativeView native) {
+          switch native {
+            case LayoutView layout {
+              require(condition: layout.content.size() == count, message: "Collection children flatten")
+              switch layout.specification {
+                case Flex(_, _, _, _, _, List<FlexSizing> items) {
+                  require(condition: items.size() == count, message: "Expanded children and sizing agree")
+                }
+                case _ { require(condition: false, message: "Flex specification") }
+              }
+            }
+            case _ { require(condition: false, message: "Layout descriptor") }
+          }
+        }
+        case _ { require(condition: false, message: "Native layout") }
+      }
+    }
+  }
+}
+
+@Test
+Void explicitLayoutItemsRemainSingleSlotsForCollections() {
+  var collection = ForEach<Integer>(items: [1, 2], identity: (Integer item) { ValueKey(item) }, child: (Integer item) { Text("${item}") })
+  List<Widget> layouts = [Flex(items: [FlexItem(content: collection, grow: 2.0)]), Grid(items: [GridItem(content: collection, span: 2)], columns: 2)]
+  for widget : layouts {
+    switch describe(widget).content {
+      case Native(NativeView native) {
+        switch native {
+          case LayoutView layout {
+            require(condition: layout.content.size() == 1, message: "Explicit item owns exactly one layout slot")
+            switch layout.specification {
+              case Flex(_, _, _, _, _, List<FlexSizing> items) {
+                require(condition: items.size() == 1 && items[0].grow == 2.0, message: "Flex constraint belongs to collection slot")
+              }
+              case Grid(_, _, List<GridCell> items, _) {
+                require(condition: items.size() == 1 && items[0].span == 2, message: "Grid span belongs to collection slot")
+              }
+              case _ { require(condition: false, message: "Sized layout") }
+            }
+          }
+          case _ { require(condition: false, message: "Layout descriptor") }
+        }
+      }
+      case _ { require(condition: false, message: "Native layout") }
+    }
+  }
 }

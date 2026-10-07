@@ -1,5 +1,8 @@
 package ui.test.objects
 
+import ui.Keyed
+import ui.NodeKey
+
 import ui.LayoutBackend
 import ui.LayoutSpec
 import ui.Scroll
@@ -565,3 +568,49 @@ View tree(List<Widget> children, WidgetRole role = WidgetRole.Default) { View(co
 View line(List<Widget> children) { View(content: describe(Row(children: [for (layoutChild : describeChildren(children)) layoutChild])).content) }
 View scrollView(Widget child) { View(content: describe(Scroll(child: describe(child))).content) }
 View actionView(String text, Function<Void()> action) { View(content: ViewContent.Button(text: text, action: componentCallback(action))) }
+
+@Test
+Void keyedWidgetsPreserveStateAndReplaceTheirLifetime() {
+  var backend = Backend()
+  var renderer = Renderer(backend)
+  var counts = LifecycleCounts()
+  renderer.render(Keyed(key: NodeKey.Named("first"), child: ConfiguredCounter(title: "old", counts: counts)))
+  Node? label = null
+  Function<Void()>? increment = null
+  for node : backend.nodes {
+    switch node.content {
+      case Text(_) { label = node }
+      case Button(_, Function<Void()> action) { increment = action }
+      case _ {}
+    }
+  }
+  increment!!()
+  renderer.render(Keyed(key: NodeKey.Named("first"), child: ConfiguredCounter(title: "updated", counts: counts)))
+  var retained = false
+  switch label!!.content {
+    case Text(String text) { retained = text == "updated:1" }
+    case _ {}
+  }
+  require(condition: retained && !label!!.closed && counts.initialized == 1 && counts.disposed == 0, message: "same key preserves private state and mount")
+  renderer.render(Keyed(key: NodeKey.Named("second"), child: ConfiguredCounter(title: "replacement", counts: counts)))
+  require(condition: label!!.closed && counts.initialized == 2 && counts.disposed == 1, message: "new key disposes old instance and initializes replacement")
+  var reset = false
+  for node : backend.nodes {
+    switch node.content {
+      case Text(String text) { if !node.closed && text == "replacement:0" { reset = true } }
+      case _ {}
+    }
+  }
+  require(condition: reset, message: "new key starts fresh private state")
+  increment!!()
+  renderer.close()
+  require(condition: counts.disposed == 2, message: "replacement lifecycle releases once")
+}
+
+@Test
+Void keyedViewsPreservePresentationMetadata() {
+  var child = View(content: ViewContent.Text("presentation"), key: NodeKey.Named("inner"), enabled: false, role: WidgetRole.Destructive)
+  var keyed = Keyed(key: NodeKey.Named("outer"), child: child).nativeView()
+  require(condition: keyed.content == child.content && keyed.enabled == child.enabled && keyed.role == child.role && keyed.reference == child.reference, message: "key wrapper preserves presentation and reference metadata")
+  require(condition: keyed.key == NodeKey.Named("outer"), message: "explicit identity replaces child identity")
+}
