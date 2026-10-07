@@ -1,0 +1,18 @@
+package state
+
+import ui.ReactiveRuntime
+import ui.State
+import ui.Computed
+
+Void main() {
+  var runtime = ReactiveRuntime()
+  var count = State<Integer>(runtime: runtime, initial: 1)
+  var doubled = Computed<Integer>(runtime: runtime, compute: () { count.value * 2 })
+  runtime.observe(() { printLine(doubled.value.toString()) })
+  runtime.batch(() {
+    count.value = 2
+    count.value = 3
+  })
+  require(condition: doubled.value == 6, message: "derived state reflects the committed batch")
+  runtime.close()
+}

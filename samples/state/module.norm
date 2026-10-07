@@ -1,0 +1,3 @@
+Module module() {
+  module(name: "state", dependencies: [dependency(repository: "github", name: "ui", version: 8)])
+}

@@ -3,9 +3,39 @@ package ui
 import std.core.Exception
 import std.core.Unit
 import std.concurrent.Task
+import std.io.Resource
 
 interface UiScheduler {
   Void track(Task<Unit> termination)
   Void later(Function<Void()> action)
   Void report(Exception error) { throw error }
+}
+
+class UiTaskTracker implements Resource {
+  private Function<Void(Function<Void()>)> dispatch
+  private List<Task<Unit>> pending = []
+  private Boolean closed = false
+
+  UiTaskTracker(Function<Void(Function<Void()>)> dispatch) { this.dispatch = dispatch }
+
+  Void track(Task<Unit> termination) {
+    if closed { throw Exception(message: "task tracker is closed") }
+    if termination.completed() { return }
+    pending.add(termination)
+    termination.then((Unit result) {
+      dispatch(() { pending = [for (task : pending) if (task != termination) task] })
+    })
+  }
+
+  Integer activeCount() { pending.size() }
+
+  Void await() {
+    var active = [for (task : pending) task]
+    for task : active { task.await() }
+  }
+
+  Void close() {
+    closed = true
+    pending = []
+  }
 }

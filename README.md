@@ -4,11 +4,11 @@
 
 Module identity and dependencies: [module.norm](ui/module.norm). Package toolchain: [workflow](.github/workflows/package.yml).
 
-Build: `norm package ui --output build/repository`.
+Build with PowerShell 7: `./scripts/package.ps1`. Use the compiler pinned by the workflow linked above.
 
 Tests: `norm test ui`.
 
-Start with the [window and button sample](samples/README.md).
+Run `norm run samples/state` for a backend-independent state example (prints `2`, then `6`). See [samples](samples/README.md) for desktop and web entry points.
 
 Native control extension points are indexed in [NativeView and Widget conversion](ui/native.norm) and the [JavaFX renderer adapter](https://github.com/normlanguage/ui.fx/blob/main/ui/fx/backend.norm).
 
@@ -21,3 +21,7 @@ Public layouts and constraints: [layout protocol](ui/layout.norm), [layout widge
 Theme integration consumes the independent `ui.theme` module: [ThemeProvider](ui/theme.norm). Typography, text direction and motion preferences: [UiProvider](ui/configuration.norm). Platform types do not appear in these contracts.
 
 Behavioral acceptance: [layout identity](ui/tests/test/layout/case.norm), [theme ownership](ui/tests/test/theme/case.norm), [configuration inheritance](ui/tests/test/configuration/case.norm).
+
+Repository requirements: [package-standards](https://github.com/normlanguage/package-standards). Licensed under [MPL-2.0](LICENSE).
+
+API and lifecycle contracts: [documentation index](docs/README.md).
