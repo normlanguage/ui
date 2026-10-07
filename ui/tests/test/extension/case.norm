@@ -24,7 +24,7 @@ class Probe implements NativeView {
   ProbeRecords records
 
   String kind() { identity }
-  List<View> children() { parts }
+  List<View> children(RenderNode node) { parts }
   RenderNode create(RenderBackend backend, ViewScope scope) {
     var node = ProbeNode(scope: scope, label: "", descendants: [], closed: false, callback: null)
     records.nodes.add(node)
@@ -95,7 +95,7 @@ class OwnedMarker implements Resource {
 class FailingNative implements NativeView {
   OwnedMarker marker
   String kind() { "failing" }
-  List<View> children() { [] }
+  List<View> children(RenderNode node) { [] }
   RenderNode create(RenderBackend backend, ViewScope scope) {
     scope.own(marker)
     throw Exception(message: "native creation failed")

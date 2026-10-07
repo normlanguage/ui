@@ -75,7 +75,7 @@ value NativeContextProbe implements NativeView, NativeWidget {
   ContextProbe probe
   String kind() { "native-context" }
   View nativeView() { View(content: ViewContent.Native(this)) }
-  List<View> children() { [] }
+  List<View> children(RenderNode node) { [] }
   RenderNode create(RenderBackend backend, ViewScope scope) {
     probe.source = themeSource()
     backend.create(ViewContent.Text("native"))

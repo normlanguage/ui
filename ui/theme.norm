@@ -16,7 +16,7 @@ value ThemeProvider implements NativeWidget, NativeView {
 
   String kind() { "theme-provider" }
   View nativeView() { View(content: ViewContent.Native(this)) }
-  List<View> children() { [describe(child)] }
+  List<View> children(RenderNode node) { [describe(child)] }
   RenderNode create(RenderBackend backend, ViewScope scope) {
     backend.create(ViewContent.Component(type: "theme-provider", body: (ViewScope unused) { describe(child) }))
   }

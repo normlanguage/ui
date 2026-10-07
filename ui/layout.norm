@@ -56,7 +56,7 @@ value LayoutView implements NativeView {
       case Masonry(_, _) { break "ui.masonry" }
     }
   }
-  List<View> children() { content }
+  List<View> children(RenderNode node) { content }
   RenderNode create(RenderBackend backend, ViewScope scope) {
     switch backend {
       case LayoutBackend layout { break layout.createLayout(specification) }

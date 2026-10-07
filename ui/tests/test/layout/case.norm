@@ -35,7 +35,7 @@ Void rowAndColumnUseOneLayoutProtocol() {
     case Native(NativeView native) {
       switch native {
         case LayoutView layout {
-          require(condition: layout.children().size() == 2, message: "builder children reach core layout")
+          require(condition: layout.content.size() == 2, message: "builder children reach core layout")
           switch layout.specification {
             case Flex(Axis axis, Double gap, _, _, _, List<FlexSizing> items) {
               require(condition: axis == Axis.Horizontal && gap == 12.0, message: "row describes horizontal flex")
