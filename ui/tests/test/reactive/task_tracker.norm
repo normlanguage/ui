@@ -1,0 +1,45 @@
+package ui.test.reactive
+
+import std.testing.Test
+import std.core.Unit
+import std.core.Exception
+import std.concurrent.completion
+import ui.UiTaskTracker
+
+@Test
+Void removesCompletedTasksWithoutAnotherRegistration() {
+  var delivered = completion<Unit>()
+  var work = completion<Unit>()
+  var tracker = UiTaskTracker(dispatch: (Function<Void()> action) {
+    action()
+    delivered.succeed(Unit.Value)
+    return
+  })
+  tracker.track(work.task())
+  require(condition: tracker.activeCount() == 1, message: "pending work is tracked")
+  work.succeed(Unit.Value)
+  delivered.task().await()
+  require(condition: tracker.activeCount() == 0, message: "completion releases retained work")
+  tracker.close()
+}
+
+@Test
+Void closingTrackerDoesNotCancelWorkOrRetainLateCompletion() {
+  var delivered = completion<Unit>()
+  var work = completion<Unit>()
+  var tracker = UiTaskTracker(dispatch: (Function<Void()> action) {
+    action()
+    delivered.succeed(Unit.Value)
+    return
+  })
+  var task = work.task()
+  tracker.track(task)
+  tracker.close()
+  require(condition: !task.completed() && tracker.activeCount() == 0, message: "tracking does not own task cancellation")
+  var rejected = false
+  try { tracker.track(task) } catch Exception failure { rejected = true }
+  require(condition: rejected, message: "closed tracker rejects new work")
+  work.succeed(Unit.Value)
+  delivered.task().await()
+  require(condition: tracker.activeCount() == 0, message: "late completion does not restore work")
+}

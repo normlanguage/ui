@@ -1,20 +1,37 @@
 name: Package
-
 on:
   pull_request:
   push:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
-
 permissions:
   contents: write
   id-token: write
   attestations: write
-
 jobs:
   package:
-    uses: normlanguage/registry/.github/workflows/package.yml@c42fcb813fd549d179896d358eb774543a9b6c0d
-    with:
-      norm-source-ref: 9dd8571427f77e7fa9b9adab38ac1272f7d82d2a
-      runner: windows-2025
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: normlanguage/registry/.github/actions/setup-norm@d229852448570c786a3f86e62c7db36769ed9a18
+        with:
+          source-ref: 02691fed8b6906cc69ef6d21b6e9edd61930981d
+      - id: package
+        uses: normlanguage/registry/.github/actions/package-module@1c5b2948a0c788f1aa21542255eb1a445027ab29
+        with:
+          module-path: ui
+      - name: Verify module and published consumer
+        shell: pwsh
+        run: |
+          $cache = Join-Path $HOME '.norm/cache/packages/github'
+          New-Item -ItemType Directory -Force $cache | Out-Null
+          Copy-Item -Path 'build/repository/*' -Destination $cache -Recurse -Force
+          norm test ui
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          norm run samples/state
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: normlanguage/registry/.github/actions/publish-module@1c5b2948a0c788f1aa21542255eb1a445027ab29
+        with:
+          archive: ${{ steps.package.outputs.archive }}
+          version: ${{ steps.package.outputs.version }}
