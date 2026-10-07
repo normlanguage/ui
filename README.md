@@ -12,7 +12,7 @@ Start with the [window and button sample](samples/README.md).
 
 Native control extension points are indexed in [NativeView and Widget conversion](ui/native.norm) and the [JavaFX renderer adapter](https://github.com/normlanguage/ui.fx/blob/main/ui/fx/backend.norm).
 
-Backend-neutral core. Desktop entry points and JavaFX rendering belong to [ui.fx](https://github.com/normlanguage/ui.fx). Page controls belong to [ui.fx.kit](https://github.com/normlanguage/ui.fx.kit).
+Backend-neutral core. Desktop entry points and JavaFX rendering belong to [ui.fx](https://github.com/normlanguage/ui.fx). JavaFX page controls belong to [ui.fx.kit](https://github.com/normlanguage/ui.fx.kit). The Vaadin web backend is [ui.web](https://github.com/normlanguage/ui.web).
 
 Reactive mount ownership is verified in [rendering tests](ui/tests/test/rendering/case.norm).
 
