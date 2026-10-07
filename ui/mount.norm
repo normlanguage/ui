@@ -4,8 +4,8 @@ import std.context.withContext
 import std.io.Resource
 import std.core.Exception
 import di.Container
-import theme.Theme
-import theme.ThemeSource
+import ui.theme.Theme
+import ui.theme.ThemeSource
 
 private enum MountIdentity { Explicit(NodeKey value), Position(Integer value) }
 

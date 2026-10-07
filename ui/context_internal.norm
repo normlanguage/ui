@@ -1,6 +1,6 @@
 package ui
 
-import theme.ThemeSource
+import ui.theme.ThemeSource
 
 class UiContext {
   State<UiConfiguration> configuration
