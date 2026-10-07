@@ -1,5 +1,10 @@
 package ui.test.objects
 
+import ui.LayoutBackend
+import ui.LayoutSpec
+import ui.Scroll
+import ui.Row
+import ui.Column
 import std.testing.Test
 import ui.Widget
 import ui.ForEach
@@ -15,7 +20,6 @@ import ui.describe
 import ui.componentCallback
 import ui.componentBinding
 import ui.ViewContent
-import ui.RenderBackend
 import ui.RenderNode
 import ui.Renderer
 import ui.ViewScope
@@ -257,8 +261,10 @@ class Node implements RenderNode {
   Void close() { closed = true }
 }
 
-class Backend implements RenderBackend {
+class Backend implements LayoutBackend {
   List<Node> nodes = []
+  RenderNode createLayout(LayoutSpec specification) { this.create(ViewContent.Text("layout")) }
+
   RenderNode create(ViewContent content) {
     var node = Node(content: content)
     nodes.add(node)
@@ -555,7 +561,7 @@ Void releasesCollectionSubscriptionsWhenTheWidgetUnmounts() {
   renderer.close()
 }
 
-View tree(List<Widget> children, WidgetRole role = WidgetRole.Default) { View(content: ViewContent.Column(describeChildren(children)), role: role) }
-View line(List<Widget> children) { View(content: ViewContent.Row(describeChildren(children))) }
-View scrollView(Widget child) { View(content: ViewContent.Scroll(describe(child))) }
+View tree(List<Widget> children, WidgetRole role = WidgetRole.Default) { View(content: describe(Column(children: [for (layoutChild : describeChildren(children)) layoutChild])).content, role: role) }
+View line(List<Widget> children) { View(content: describe(Row(children: [for (layoutChild : describeChildren(children)) layoutChild])).content) }
+View scrollView(Widget child) { View(content: describe(Scroll(child: describe(child))).content) }
 View actionView(String text, Function<Void()> action) { View(content: ViewContent.Button(text: text, action: componentCallback(action))) }

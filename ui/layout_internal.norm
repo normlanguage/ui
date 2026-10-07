@@ -1,0 +1,7 @@
+package ui
+
+import std.core.Exception
+
+Void layoutDistance(Double value) {
+  if !(value >= 0.0 && value <= 1.7976931348623157E308) { throw Exception(message: "layout distance must be finite and nonnegative") }
+}

@@ -1,12 +1,14 @@
 package ui.test.rendering
 
+import ui.LayoutBackend
+import ui.LayoutSpec
+import ui.Column
 import ui.NodeKey
 
 import std.testing.Test
 import std.core.Exception
 import ui.View
 import ui.ViewContent
-import ui.RenderBackend
 import ui.RenderNode
 import ui.Renderer
 import ui.ViewScope
@@ -29,10 +31,10 @@ Void initialMountDefersReactiveUpdatesUntilTheTreeIsOwned() {
     var count = scope.state<Integer>(key: NodeKey.Named("count"), initial: 0)
     state.count = count
     var title = count.value.toString()
-    View(content: ViewContent.Column([
+    View(content: describe(Column(children: [for (layoutChild : [
       View(content: ViewContent.Text(title)),
       describe(MountMutation(count: count))
-    ]))
+    ]) layoutChild])).content)
   })))
   require(condition: state.count!!.value == 1, message: "child initialization changes parent state")
   renderer.close()
@@ -70,9 +72,11 @@ class RecordedNode implements RenderNode {
   }
 }
 
-class RecordingBackend implements RenderBackend {
+class RecordingBackend implements LayoutBackend {
   List<RecordedNode> created
   String failOn = ""
+
+  RenderNode createLayout(LayoutSpec specification) { this.create(ViewContent.Text("layout")) }
 
   RenderNode create(ViewContent content) {
     var node = RecordedNode(identity: created.size(), text: "", descendants: [], disposed: false, failOn: failOn)
@@ -143,7 +147,7 @@ View label(NodeKey? key, String text) {
 }
 
 View list(List<View> children) {
-  return View(key: NodeKey.Named("root"), content: ViewContent.Column(children))
+  return View(key: NodeKey.Named("root"), content: describe(Column(children: [for (layoutChild : children) layoutChild])).content)
 }
 
 @Test

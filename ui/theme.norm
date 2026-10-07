@@ -1,0 +1,23 @@
+package ui
+
+import theme.Theme
+import theme.ThemeSource
+import std.context.currentContext
+
+interface ThemedRenderNode extends RenderNode {
+  Void theme(Theme? theme)
+}
+
+ThemeSource? themeSource() { currentContext<UiContext>()?.source }
+
+value ThemeProvider implements NativeWidget, NativeView {
+  Widget child
+  ThemeSource? source = null
+
+  String kind() { "theme-provider" }
+  View nativeView() { View(content: ViewContent.Native(this)) }
+  List<View> children() { [describe(child)] }
+  RenderNode create(RenderBackend backend, ViewScope scope) {
+    backend.create(ViewContent.Component(type: "theme-provider", body: (ViewScope unused) { describe(child) }))
+  }
+}

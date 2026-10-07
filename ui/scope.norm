@@ -19,10 +19,12 @@ class ViewScope implements Resource, ResourceOwner, TaskExecutor, TaskScope {
   private Map<NodeKey, Any> slots
   private List<Resource> resources
   private Boolean closed
+  private UiContext context
 
-  ViewScope(ReactiveRuntime runtime, UiScheduler? scheduler = null) {
+  ViewScope(ReactiveRuntime runtime, UiScheduler? scheduler = null, UiContext? context = null) {
     this.runtime = runtime
     this.scheduler = scheduler
+    this.context = context ?? UiContext()
     slots = Map<>()
     resources = []
     closed = false
@@ -94,9 +96,11 @@ class ViewScope implements Resource, ResourceOwner, TaskExecutor, TaskScope {
   }
 
   R within<R>(Function<R()> action) {
-    withContext<ResourceOwner, R>(value: this, action: () {
-      withContext<TaskScope, R>(value: this, action: () {
-        withContext<ViewScope, R>(value: this, action: action)
+    withContext<UiContext, R>(value: context, action: () {
+      withContext<ResourceOwner, R>(value: this, action: () {
+        withContext<TaskScope, R>(value: this, action: () {
+          withContext<ViewScope, R>(value: this, action: action)
+        })
       })
     })
   }

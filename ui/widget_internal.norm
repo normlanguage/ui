@@ -11,7 +11,7 @@ View widgetView(Widget widget) {
 
 interface WidgetCollection extends Widget {
   List<Widget> widgets()
-  Widget build() { View(content: ViewContent.Column(widgetViews(this.widgets()))) }
+  Widget build() { Column(children: this.widgets()) }
 }
 
 List<View> widgetViews(List<Widget> widgets) {

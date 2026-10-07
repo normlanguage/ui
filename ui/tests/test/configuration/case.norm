@@ -1,0 +1,87 @@
+package ui.test.configuration
+
+import std.testing.Test
+import std.core.Exception
+import ui.UiConfiguration
+import ui.UiProvider
+import ui.TextDirection
+import ui.ConfiguredRenderNode
+import ui.RenderBackend
+import ui.RenderNode
+import ui.Renderer
+import ui.View
+import ui.ViewContent
+import ui.ViewScope
+import ui.uiConfiguration
+import ui.componentCallback
+
+class ConfigurationNode implements ConfiguredRenderNode {
+  UiConfiguration snapshot = UiConfiguration()
+  Void configure(UiConfiguration configuration) { snapshot = configuration }
+  Void update(View view) {}
+  Void children(List<RenderNode> children) {}
+  Void close() {}
+}
+
+class ConfigurationBackend implements RenderBackend {
+  List<ConfigurationNode> nodes = []
+  RenderNode create(ViewContent content) {
+    var node = ConfigurationNode()
+    nodes.add(node)
+    node
+  }
+}
+
+class ConfigurationProbe {
+  UiConfiguration observed = UiConfiguration()
+  Function<Void()>? callback = null
+}
+
+@Test
+Void inheritsAndReplacesConfigurationWithoutRemounting() {
+  var backend = ConfigurationBackend()
+  var renderer = Renderer(backend)
+  var child = View(content: ViewContent.Text("retained"))
+  var configuration = UiConfiguration(fontFamily: "Arial", fontSize: 18.0, direction: TextDirection.RightToLeft, motionEnabled: false)
+  renderer.render(UiProvider(child: child))
+  var retained = backend.nodes[1]
+  renderer.render(UiProvider(child: child, configuration: configuration))
+  require(condition: retained.snapshot == configuration && backend.nodes.size() == 2, message: "configuration changes retain nodes")
+  renderer.render(UiProvider(child: child))
+  require(condition: retained.snapshot == UiConfiguration() && backend.nodes.size() == 2, message: "removing override restores inherited default")
+  renderer.close()
+}
+
+@Test
+Void restoresNestedConfigurationInMountedCallbacks() {
+  var configuration = UiConfiguration(fontSize: 20.0, motionEnabled: false)
+  var probe = ConfigurationProbe()
+  var body = View(content: ViewContent.Component(type: "configuration", body: (ViewScope scope) {
+    probe.observed = uiConfiguration()
+    probe.callback = componentCallback(() { probe.observed = uiConfiguration() })
+    View(content: ViewContent.Text("configured"))
+  }))
+  var backend = ConfigurationBackend()
+  var renderer = Renderer(backend)
+  renderer.render(UiProvider(configuration: configuration, child: UiProvider(child: body)))
+  require(condition: probe.observed == configuration, message: "empty nested provider inherits configuration")
+  probe.observed = UiConfiguration()
+  probe.callback!!()
+  require(condition: probe.observed == configuration, message: "mounted callback restores configuration")
+  renderer.close()
+}
+
+@Test
+Void rejectsInvalidTypographyBeforeCreatingPeers() {
+  var backend = ConfigurationBackend()
+  var renderer = Renderer(backend)
+  Boolean rejected = false
+  try { renderer.render(UiProvider(configuration: UiConfiguration(fontSize: 0.0), child: View(content: ViewContent.Text("bad")))) }
+  catch Exception error { rejected = true }
+  require(condition: rejected && backend.nodes.size() == 0, message: "invalid typography fails before peer creation")
+  rejected = false
+  try { UiConfiguration(fontFamily: "Arial\n") }
+  catch Exception error { rejected = true }
+  require(condition: rejected, message: "font family excludes CSS control characters")
+  renderer.close()
+}

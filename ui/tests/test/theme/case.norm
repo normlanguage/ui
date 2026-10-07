@@ -1,0 +1,145 @@
+package ui.test.theme
+
+import ui.LayoutBackend
+import ui.LayoutSpec
+import std.testing.Test
+import ui.Renderer
+import ui.RenderBackend
+import ui.RenderNode
+import ui.ThemedRenderNode
+import ui.ThemeProvider
+import ui.View
+import ui.ViewContent
+import ui.ViewScope
+import ui.themeSource
+import ui.componentCallback
+import ui.NativeView
+import ui.NativeWidget
+import theme.ThemeSource
+import theme.Theme
+import theme.ThemeManager
+import theme.ThemeDefinition
+import theme.ThemeMode
+import theme.Color
+
+class ThemeNode implements ThemedRenderNode {
+  Theme? snapshot = null
+  Integer deliveries = 0
+  Boolean closed = false
+  Void theme(Theme? theme) { snapshot = theme deliveries = deliveries + 1 }
+  Void update(View view) {}
+  Void children(List<RenderNode> children) {}
+  Void close() { closed = true }
+}
+
+class ThemeBackend implements LayoutBackend {
+  List<ThemeNode> nodes = []
+  RenderNode createLayout(LayoutSpec specification) { this.create(ViewContent.Text("layout")) }
+
+  RenderNode create(ViewContent content) {
+    var node = ThemeNode()
+    nodes.add(node)
+    node
+  }
+}
+
+class ContextProbe {
+  ThemeSource? source = null
+  Function<Void()>? callback = null
+}
+
+@Test
+Void nullableOverridesPreserveChildrenAndClearOldTheme() {
+  var source = ThemeManager(ThemeDefinition(primary: Color(hex: "#1677ff")))
+  var backend = ThemeBackend()
+  var renderer = Renderer(backend)
+  var child = View(content: ViewContent.Text("retained"))
+  renderer.render(ThemeProvider(child: child))
+  var node = backend.nodes[1]
+  require(condition: node.snapshot == null, message: "unspecified root has no theme")
+  renderer.render(ThemeProvider(source: source, child: child))
+  require(condition: node.snapshot == source.current() && backend.nodes.size() == 2, message: "adding theme preserves mounted child")
+  renderer.render(ThemeProvider(child: child))
+  require(condition: node.snapshot == null && backend.nodes.size() == 2, message: "removing theme clears styles and preserves child")
+  var count = node.deliveries
+  source.setMode(ThemeMode.Dark)
+  require(condition: node.deliveries == count, message: "removed theme releases subscription")
+  renderer.close()
+  source.close()
+}
+
+value NativeContextProbe implements NativeView, NativeWidget {
+  ContextProbe probe
+  String kind() { "native-context" }
+  View nativeView() { View(content: ViewContent.Native(this)) }
+  List<View> children() { [] }
+  RenderNode create(RenderBackend backend, ViewScope scope) {
+    probe.source = themeSource()
+    backend.create(ViewContent.Text("native"))
+  }
+}
+
+@Test
+Void suppliesThemeContextBeforeCreatingNativePeers() {
+  var source = ThemeManager(ThemeDefinition(primary: Color(hex: "#1677ff")))
+  var probe = ContextProbe()
+  var renderer = Renderer(ThemeBackend())
+  renderer.render(ThemeProvider(source: source, child: NativeContextProbe(probe: probe)))
+  require(condition: probe.source == source, message: "native adapters receive theme during creation")
+  renderer.close()
+  source.close()
+}
+
+@Test
+Void nestedProvidersIsolateThemesAndRestoreContextForCallbacks() {
+  var outer = ThemeManager(ThemeDefinition(primary: Color(hex: "#1677ff")))
+  var inner = ThemeManager(ThemeDefinition(primary: Color(hex: "#722ed1")))
+  var probe = ContextProbe()
+  var body = View(content: ViewContent.Component(type: "context", body: (ViewScope scope) {
+    probe.source = themeSource()
+    probe.callback = componentCallback(() { probe.source = themeSource() })
+    View(content: ViewContent.Text("nested"))
+  }))
+  var backend = ThemeBackend()
+  var renderer = Renderer(backend)
+  renderer.render(ThemeProvider(source: outer, child: ThemeProvider(source: inner, child: body)))
+  require(condition: probe.source == inner, message: "nearest provider supplies build context")
+  var leaf = backend.nodes[3]
+  outer.setMode(ThemeMode.Dark)
+  require(condition: leaf.snapshot == inner.current(), message: "inner provider isolates outer mode updates")
+  probe.source = null
+  probe.callback!!()
+  require(condition: probe.source == inner, message: "callback restores mounted theme context")
+  renderer.close()
+  probe.source = null
+  probe.callback!!()
+  require(condition: probe.source == null, message: "unmounted callback cannot run")
+  outer.close()
+  inner.close()
+}
+
+@Test
+Void updatesAndRebindsThemesWithoutRemountingAndReleasesSubscriptions() {
+  var first = ThemeManager(ThemeDefinition(primary: Color(hex: "#1677ff")))
+  var second = ThemeManager(ThemeDefinition(primary: Color(hex: "#722ed1")))
+  var backend = ThemeBackend()
+  var renderer = Renderer(backend)
+  var child = View(content: ViewContent.Text("retained"))
+  renderer.render(ThemeProvider(source: first, child: child))
+  require(condition: backend.nodes.size() == 2, message: "provider and child are mounted")
+  var node = backend.nodes[1]
+  require(condition: node.snapshot == first.current(), message: "child inherits initial theme")
+  first.setMode(ThemeMode.Dark)
+  require(condition: node.snapshot == first.current() && backend.nodes.size() == 2, message: "switching updates existing child")
+  renderer.render(ThemeProvider(source: second, child: child))
+  require(condition: node.snapshot == second.current() && backend.nodes.size() == 2, message: "source replacement preserves mounted nodes")
+  var count = node.deliveries
+  first.setMode(ThemeMode.Light)
+  require(condition: node.deliveries == count, message: "old source subscription is released")
+  renderer.close()
+  second.setMode(ThemeMode.Dark)
+  require(condition: node.closed && node.deliveries == count, message: "unmount releases theme subscriptions")
+  require(condition: second.current().mode == ThemeMode.Dark, message: "externally owned source survives unmount")
+  first.close()
+  second.close()
+}

@@ -1,5 +1,9 @@
 package ui.test.extension
 
+import ui.LayoutBackend
+import ui.LayoutSpec
+import ui.Row
+import ui.describe
 import std.testing.Test
 import std.io.Resource
 import std.core.Exception
@@ -70,8 +74,10 @@ class PlainNode implements RenderNode {
   Void close() { closed = true }
 }
 
-class PlainBackend implements RenderBackend {
+class PlainBackend implements LayoutBackend {
   List<PlainNode> created = []
+  RenderNode createLayout(LayoutSpec specification) { this.create(ViewContent.Text("layout")) }
+
   RenderNode create(ViewContent content) {
     var node = PlainNode(label: "", descendants: [], closed: false)
     created.add(node)
@@ -98,7 +104,7 @@ class FailingNative implements NativeView {
 
 View preview(NodeKey key, Probe probe) { View(key: key, content: ViewContent.Native(probe)) }
 View text(NodeKey key, String value) { View(key: key, content: ViewContent.Text(value)) }
-View row(List<View> parts) { View(content: ViewContent.Row(parts)) }
+View row(List<View> parts) { View(content: describe(Row(children: [for (layoutChild : parts) layoutChild])).content) }
 
 @Test
 Void mountsNativeViewsAlongsideBuiltinChildrenAndReusesMatchingKeys() {

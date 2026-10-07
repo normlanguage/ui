@@ -1,0 +1,26 @@
+package ui
+
+import std.core.Exception
+
+value Text implements NativeWidget {
+  String text
+  WidgetRole role
+
+  Text(String text) { this.text = text role = WidgetRole.Default }
+  Text(String text, WidgetRole role) { this.text = text this.role = role }
+
+  View nativeView() { View(content: ViewContent.Text(text), role: role) }
+}
+
+
+value TextArea implements NativeWidget {
+  String placeholder
+  Binding<String> value
+  Integer rows = 6
+  Boolean editable = true
+
+  View nativeView() {
+    if rows < 1 || rows > 40 { throw Exception(message: "text area row count is outside 1..40") }
+    View(content: ViewContent.Multiline(placeholder: placeholder, text: componentBinding<String>(value), rows: rows, editable: editable))
+  }
+}

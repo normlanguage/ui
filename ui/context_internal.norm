@@ -1,0 +1,9 @@
+package ui
+
+import theme.ThemeSource
+
+class UiContext {
+  ThemeSource? source = null
+  UiConfiguration configuration = UiConfiguration()
+}
+

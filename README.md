@@ -15,3 +15,9 @@ Native control extension points are indexed in [NativeView and Widget conversion
 Backend-neutral core. Desktop entry points and JavaFX rendering belong to [ui.fx](https://github.com/normlanguage/ui-fx). Page controls belong to [ui.kit](https://github.com/normlanguage/ui-component).
 
 Reactive mount ownership is verified in [rendering tests](ui/tests/test/rendering/case.norm).
+
+Public layouts and constraints: [layout protocol](ui/layout.norm), [layout widgets](ui/layouts.norm). Basic text and editing: [elements](ui/elements.norm).
+
+Theme integration consumes the independent `theme` module: [ThemeProvider](ui/theme.norm). Typography, text direction and motion preferences: [UiProvider](ui/configuration.norm). Platform types do not appear in these contracts.
+
+Behavioral acceptance: [layout identity](ui/tests/test/layout/case.norm), [theme ownership](ui/tests/test/theme/case.norm), [configuration inheritance](ui/tests/test/configuration/case.norm).

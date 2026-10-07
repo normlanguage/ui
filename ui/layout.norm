@@ -1,0 +1,67 @@
+package ui
+
+import std.core.Exception
+
+enum Axis { Horizontal, Vertical }
+enum MainAlignment { Start, Center, End, SpaceBetween, SpaceAround, SpaceEvenly }
+enum CrossAlignment { Start, Center, End, Stretch }
+enum DockArea { Top, Bottom, Left, Right, Center }
+enum Dimension { Content, Fixed(Double value), Fill }
+
+value Insets {
+  Double top = 0.0
+  Double right = 0.0
+  Double bottom = 0.0
+  Double left = 0.0
+}
+
+value SizeConstraints {
+  Dimension width = Dimension.Content
+  Dimension height = Dimension.Content
+  Double minWidth = 0.0
+  Double minHeight = 0.0
+  Double? maxWidth = null
+  Double? maxHeight = null
+}
+
+value FlexSizing { Double grow = 0.0 Double shrink = 1.0 }
+value GridCell { Integer span = 1 }
+value GridBreakpoint { Double minimumWidth Integer columns }
+
+enum LayoutSpec {
+  Flex(Axis axis, Double gap, MainAlignment main, CrossAlignment cross, Boolean wrap, List<FlexSizing> items),
+  Grid(Integer columns, Double gap, List<GridCell> items, List<GridBreakpoint> breakpoints),
+  Box(SizeConstraints size, Insets padding),
+  Stack(CrossAlignment horizontal, CrossAlignment vertical),
+  Dock(List<DockArea> areas),
+  Scroll(Axis axis, Boolean fitWidth, Boolean fitHeight),
+  Masonry(Double minimumColumnWidth, Double gap)
+}
+
+interface LayoutBackend extends RenderBackend {
+  RenderNode createLayout(LayoutSpec specification)
+}
+
+value LayoutView implements NativeView {
+  LayoutSpec specification
+  List<View> content
+  String kind() {
+    switch specification {
+      case Flex(_, _, _, _, _, _) { break "ui.flex" }
+      case Grid(_, _, _, _) { break "ui.grid" }
+      case Box(_, _) { break "ui.box" }
+      case Stack(_, _) { break "ui.stack" }
+      case Dock(_) { break "ui.dock" }
+      case Scroll(_, _, _) { break "ui.scroll" }
+      case Masonry(_, _) { break "ui.masonry" }
+    }
+  }
+  List<View> children() { content }
+  RenderNode create(RenderBackend backend, ViewScope scope) {
+    switch backend {
+      case LayoutBackend layout { break layout.createLayout(specification) }
+      case _ { throw Exception(message: "rendering backend does not implement layout protocol") }
+    }
+  }
+}
+
