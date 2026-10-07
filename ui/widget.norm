@@ -13,3 +13,12 @@ interface Widget {
   Widget build()
   Void dispose() {}
 }
+
+value Keyed implements NativeWidget {
+  NodeKey key
+  Widget child
+  View nativeView() {
+    var view = widgetView(child)
+    View(content: view.content, key: key, enabled: view.enabled, role: view.role, reference: view.reference)
+  }
+}

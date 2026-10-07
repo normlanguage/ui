@@ -27,8 +27,7 @@ value ForEach<T> implements WidgetCollection {
   List<Widget> widgets() {
     List<Widget> result = []
     for item : items {
-      var view = widgetView(child(item))
-      result.add(View(content: view.content, key: NodeKey.Item(identity(item)), enabled: view.enabled, role: view.role, reference: view.reference))
+      result.add(Keyed(key: NodeKey.Item(identity(item)), child: child(item)))
     }
     result
   }
