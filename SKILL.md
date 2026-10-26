@@ -1,6 +1,6 @@
 # ui Skill
 
-Use this skill to work with Norm module `ui` version 9. Use only declarations listed below.
+Use this skill to work with Norm module `ui` version 10. Use only declarations listed below.
 
 ## `ui`
 
