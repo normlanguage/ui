@@ -1,5 +1,7 @@
 # ui
 
+本项目使用 [Norm](https://github.com/normlanguage/Norm) 构建。
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 模块身份和依赖见 [module.norm](ui/module.norm)，发布使用的工具链见[工作流](.github/workflows/package.yml)。

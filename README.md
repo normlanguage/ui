@@ -1,5 +1,7 @@
 # ui
 
+Built with [Norm](https://github.com/normlanguage/Norm).
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 Module identity and dependencies: [module.norm](ui/module.norm). Package toolchain: [workflow](.github/workflows/package.yml).
