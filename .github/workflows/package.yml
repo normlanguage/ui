@@ -14,11 +14,11 @@ jobs:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v7
-      - uses: normlanguage/registry/.github/actions/setup-norm@d229852448570c786a3f86e62c7db36769ed9a18
+      - uses: normlanguage/registry/.github/actions/setup-norm@90b4d247fa4f5f2b620924d2cbc0553e89843700
         with:
-          source-ref: 0ab66c108ee77d8a3f16f85f51499aaaaff15943
+          version: 0.27.23
       - id: package
-        uses: normlanguage/registry/.github/actions/package-module@1c5b2948a0c788f1aa21542255eb1a445027ab29
+        uses: normlanguage/registry/.github/actions/package-module@90b4d247fa4f5f2b620924d2cbc0553e89843700
         with:
           module-path: ui
       - name: Verify module and published consumer
@@ -31,7 +31,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           norm run samples/state
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - uses: normlanguage/registry/.github/actions/publish-module@1c5b2948a0c788f1aa21542255eb1a445027ab29
+      - uses: normlanguage/registry/.github/actions/publish-module@90b4d247fa4f5f2b620924d2cbc0553e89843700
         with:
           archive: ${{ steps.package.outputs.archive }}
           version: ${{ steps.package.outputs.version }}
