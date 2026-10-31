@@ -2,3 +2,4 @@ build/
 dependencies/
 .norm/
 ui/resources/META-INF/licenses/ui/LICENSE
+/ui/resources/META-INF/licenses/ui/LICENSE
